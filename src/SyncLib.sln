@@ -1,7 +1,25 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "SyncLib", "SyncLib\SyncLib.fsproj", "{0096AAE6-3902-473D-B419-F6F9931D3B86}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "SyncLib.Git", "SyncLib.Git\SyncLib.Git.fsproj", "{C75A3D77-43CD-419E-96B4-F308B05DE1B5}"
+EndProject
 Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{0096AAE6-3902-473D-B419-F6F9931D3B86}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0096AAE6-3902-473D-B419-F6F9931D3B86}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0096AAE6-3902-473D-B419-F6F9931D3B86}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0096AAE6-3902-473D-B419-F6F9931D3B86}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C75A3D77-43CD-419E-96B4-F308B05DE1B5}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C75A3D77-43CD-419E-96B4-F308B05DE1B5}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C75A3D77-43CD-419E-96B4-F308B05DE1B5}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C75A3D77-43CD-419E-96B4-F308B05DE1B5}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
 	EndGlobalSection

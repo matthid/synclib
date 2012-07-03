@@ -39,14 +39,15 @@
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Helpers.fs" />
     <Compile Include="GitProcess.fs" />
     <Compile Include="GitRepository.fs" />
     <None Include="Script.fsx" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\SparkleLib.FSharp\SyncLib.FSharp.fsproj">
-      <Name>SyncLib.FSharp</Name>
+    <ProjectReference Include="..\SyncLib\SyncLib.fsproj">
+      <Name>SyncLib</Name>
       <Project>{0096aae6-3902-473d-b419-f6f9931d3b86}</Project>
       <Private>True</Private>
     </ProjectReference>

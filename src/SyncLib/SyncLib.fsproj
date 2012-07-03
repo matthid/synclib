@@ -39,11 +39,12 @@
     <Reference Include="System.Numerics" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
     <Compile Include="ManagedFolder.fs" />
     <Compile Include="ChangeWatcher.fs" />
     <Compile Include="RepositoryFolder.fs" />
     <None Include="Script.fsx" />
-    <None Include="..\build.fsx">
+    <None Include="..\..\build.fsx">
       <Link>build.fsx</Link>
     </None>
   </ItemGroup>

@@ -3,7 +3,7 @@
 open SyncLib
 
 type GitRepositoryFolder(folder:ManagedFolderInfo) =  
-    inherit RepositoryFolder(folder)
+    inherit RepositoryFolder(folder, new LocalChangeWatcher(folder), new RemoteChangeWatcher(folder))
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()
     let remoteName = "synclib"

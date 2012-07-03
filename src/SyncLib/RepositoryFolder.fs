@@ -5,12 +5,12 @@ type ProcessorMessage =
     | DoSyncDown
 
 [<AbstractClass>]
-type RepositoryFolder(folder : ManagedFolderInfo) as x = 
+type RepositoryFolder(folder : ManagedFolderInfo, localWatcher : IChangeWatcher, remoteWatcher : IChangeWatcher) as x = 
     let syncConflict = new Event<SyncConflict>()
     let syncError = new Event<System.Exception>()
     let syncStateChanged = new Event<SyncState>()
-    let localWatcher = new LocalChangeWatcher(folder) :> IChangeWatcher
-    let remoteWatcher = new RemoteChangeWatcher(folder) :> IChangeWatcher
+    let localWatcher = localWatcher
+    let remoteWatcher = remoteWatcher
     let mutable isStarted = false
     
     let doTask syncState (getTask:unit->System.Threading.Tasks.Task<_>) = 
@@ -94,7 +94,7 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
 
 /// This is a example implementation you can instantly start with
 type EmptyRepository(folder:ManagedFolderInfo) =  
-    inherit RepositoryFolder(folder)
+    inherit RepositoryFolder(folder, new LocalChangeWatcher(folder), new RemoteChangeWatcher(folder))
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()
 
