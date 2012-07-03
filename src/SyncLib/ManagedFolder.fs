@@ -13,7 +13,7 @@ type ManagedFolderInfo(name:string, path:string, remote:string, backend:string, 
             dict.[key]
 
 type SyncConflict = 
-    | File of string
+    | Unknown of string
 
 type SyncState = 
     | Idle     = 0

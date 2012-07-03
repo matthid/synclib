@@ -2,7 +2,7 @@
 
 open SyncLib
 
-type GitRepositoryFolder(folder:ManagedFolderInfo) =  
+type GitRepositoryFolder(folder:ManagedFolderInfo) as x =  
     inherit RepositoryFolder(folder, new LocalChangeWatcher(folder), new RemoteChangeWatcher(folder))
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()
@@ -36,21 +36,42 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) =
         }
 
 
-    let syncDown() = async {
+    let syncDown() =
+        async {
             progressChanged.Trigger 0.0
             if not isInit then do! init()
 
-            //TODO: Fetch remote branch (with progress bar)
+            // Fetch changes
+            do! GitProcess.RunGitFetchAsync(
+                    folder.FullPath, 
+                    folder.Remote, 
+                    "master", 
+                    (fun newProgress -> progressChanged.Trigger newProgress))
+                |> Async.Ignore
 
+            progressChanged.Trigger 1.0
 
+            // Merge changes into local directory via "git rebase FETCH_HEAD"
+            try
+                do! GitProcess.RunGitRebaseAsync(folder.FullPath, "FETCH_HEAD", "master")
+            with
+                | GitProcessFailed(s) ->
+                    // Conflict
+                    syncConflict.Trigger (SyncConflict.Unknown s)
 
-            //TODO: Resolve conflicts
-
-            return ()
+                    // TODO: Resolve conflict
+                    //do! GitProcess.RunGitInitAsync(folder.FullPath) 
         }
     let syncUp() = async {
-            
-            // TODO: Push to server
+            try
+                // TODO: Push to server
+                do ()
+            with 
+                | GitProcessFailed(s) ->
+                    // Conflict
+                    syncConflict.Trigger (SyncConflict.Unknown s)
+                    x.RequestSyncDown() // We handle conflicts there
+                    x.RequestSyncUp()
             
             return ()
         }

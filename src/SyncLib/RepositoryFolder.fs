@@ -31,15 +31,36 @@ type RepositoryFolder(folder : ManagedFolderInfo, localWatcher : IChangeWatcher,
     /// This will ensure that only one sync process is running at any time
     let processor = 
         MailboxProcessor<_>.Start(fun inbox -> 
+            let handleMsg msg = 
+                async {
+                do!
+                    match msg with
+                    | DoSyncUp -> 
+                        doTask SyncState.SyncUp (fun () -> x.StartSyncUp())
+                    | DoSyncDown ->
+                        doTask SyncState.SyncDown (fun () -> x.StartSyncDown())
+                }
             let rec loop () =
                 async {
-                    let! msg = inbox.Receive()
-                    do!
-                        match msg with
-                        | DoSyncUp -> 
-                            doTask SyncState.SyncUp (fun () -> x.StartSyncUp())
-                        | DoSyncDown ->
-                            doTask SyncState.SyncDown (fun () -> x.StartSyncDown())
+                    // Get All messages
+                    let! allmsgs = 
+                        seq {
+                            for i in 1 .. inbox.CurrentQueueLength do
+                                yield inbox.Receive()
+                        }
+                        |> Async.Parallel
+                    
+                    // Make sure SyncDowns are prefered over SyncUp
+                    // And also make sure we do not spam our queue
+                    for msg in
+                        allmsgs |> Set.ofSeq  |> Seq.sort |> Seq.toList |> List.rev do
+                        do!
+                            match msg with
+                            | DoSyncUp -> 
+                                doTask SyncState.SyncUp (fun () -> x.StartSyncUp())
+                            | DoSyncDown ->
+                                doTask SyncState.SyncDown (fun () -> x.StartSyncDown())
+                                       
                     return! loop()
                 }
             loop () 
@@ -53,6 +74,14 @@ type RepositoryFolder(folder : ManagedFolderInfo, localWatcher : IChangeWatcher,
         // Start watching
         startWatching localWatcher DoSyncUp
         startWatching remoteWatcher DoSyncDown
+
+    /// Requests a UpSync Operation
+    member x.RequestSyncUp () = 
+        processor.Post(DoSyncUp)
+
+    /// Requests a DownSync Operation
+    member x.RequestSyncDown () = 
+        processor.Post(DoSyncDown)
 
     /// Does a complete sync to the server (Should fail when there are conflicting changes)
     abstract StartSyncUp : unit -> System.Threading.Tasks.Task<unit>

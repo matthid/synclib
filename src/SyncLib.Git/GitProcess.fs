@@ -13,11 +13,17 @@ type BranchType =
 
 type RemoteType =   
     | ListVerbose
-    /// rename from to
+    /// git remote rename from to
     | Rename of string * string
     | Remove of string
     /// git remote add {0} {1}
     | Add of string * string
+type RebaseType =   
+    | Continue
+    | Abort
+    | Skip
+    /// git rebase from to
+    | Start of string * string
 
 type GitArguments = 
     /// ls-remote --exit-code \"{0}\" {1}
@@ -29,6 +35,7 @@ type GitArguments =
     | Remote of RemoteType
     /// fetch --progress \"{0}\" {1}
     | Fetch of string * string
+    | Rebase of RebaseType
 
 module HandleGitArguments = 
     let toCommandLine args = 
@@ -52,6 +59,14 @@ module HandleGitArguments =
                 | Add(name, url) -> sprintf "add %s %s" name url)
 
         | Fetch(url, branch) -> sprintf "fetch --progress \"%s\" %s" url branch
+
+        | Rebase (rebaseType) ->
+            sprintf "rebase %s" 
+                (match rebaseType with 
+                | Continue -> "--continue"
+                | Abort -> "--abort"
+                | Skip -> "--skip"
+                | Start(from, toName) -> sprintf "%s %s" from toName)
 
     let possibleGitPaths = 
         [ "/usr/bin/git";
@@ -360,4 +375,11 @@ type GitProcess(workingDir:string, gitArguments) =
                                         1.0 - compressingPart))
                     None
                 )
+        }
+
+    static member RunGitRebaseAsync(location, fromBranch, intoBranch) = 
+        async {
+            use gitProc = new GitProcess(location, GitArguments.Rebase(Start(fromBranch, intoBranch)))
+            do!
+                gitProc.RunAsync(id)
         }
