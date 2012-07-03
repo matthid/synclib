@@ -1,0 +1,7 @@
+Counting objects: 23, done.
+Delta compression using up to 4 threads.
+Compressing objects:   6% (1/15)   Compressing objects:  13% (2/15)   Compressing objects:  20% (3/15)   Compressing objects:  26% (4/15)   Compressing objects:  33% (5/15)   Compressing objects:  40% (6/15)   Compressing objects:  46% (7/15)   Compressing objects:  53% (8/15)   Compressing objects:  60% (9/15)   Compressing objects:  66% (10/15)   Compressing objects:  73% (11/15)   Compressing objects:  80% (12/15)   Compressing objects:  86% (13/15)   Compressing objects:  93% (14/15)   Compressing objects: 100% (15/15)   Compressing objects: 100% (15/15), done.
+Writing objects:   6% (1/15)   Writing objects:  13% (2/15)   Writing objects:  20% (3/15)   Writing objects:  26% (4/15)   Writing objects:  33% (5/15)   Writing objects:  40% (6/15)   Writing objects:  46% (7/15)   Writing objects:  53% (8/15)   Writing objects:  60% (9/15)   Writing objects:  66% (10/15)   Writing objects:  73% (11/15)   Writing objects:  80% (12/15)   Writing objects:  86% (13/15)   Writing objects:  93% (14/15)   Writing objects: 100% (15/15)   Writing objects: 100% (15/15), 2.75 KiB, done.
+Total 15 (delta 13), reused 0 (delta 0)
+To git@yaaf.no-ip.org:synclib.git
+   4228053..08c663c  master -> master

@@ -47,7 +47,7 @@ type IManagedFolder =
   
 type IBackendManager = 
     /// Inits the 
-    abstract member createFolderManager : ManagedFolderInfo -> IManagedFolder
+    abstract member CreateFolderManager : ManagedFolderInfo -> IManagedFolder
 
 /// A simple wrapper around the interface which keeps track over the state
 type ManagedFolderWrapper(impl:IManagedFolder) = 

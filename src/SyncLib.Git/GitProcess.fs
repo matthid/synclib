@@ -5,6 +5,7 @@ namespace SyncLib.Git
 open System.Diagnostics
 open System.IO
 open SyncLib.Helpers
+open SyncLib.Helpers.Logger
 
 type BranchType = 
     | Local
@@ -18,13 +19,23 @@ type RemoteType =
     | Remove of string
     /// git remote add {0} {1}
     | Add of string * string
+type ConflictFileType = 
+    | Ours
+    | Theirs
+    
+type CheckoutType = 
+    | Conflict of ConflictFileType * string list
+    | Branch of string
 type RebaseType =   
     | Continue
     | Abort
     | Skip
     /// git rebase from to
     | Start of string * string
-
+type GitAddType =   
+    | NoOptions
+    | Update
+    | All
 type GitArguments = 
     /// ls-remote --exit-code \"{0}\" {1}
     | Ls_remote of string * string
@@ -35,9 +46,19 @@ type GitArguments =
     | Remote of RemoteType
     /// fetch --progress \"{0}\" {1}
     | Fetch of string * string
+    /// push --progress \"{0}\" {1}
+    | Push of string * string
     | Rebase of RebaseType
+    | Add of GitAddType * string list
+    /// commit -m \"{0}\"
+    | Commit of string
+    | Checkout of CheckoutType
 
 module HandleGitArguments = 
+    let escapePath p = 
+        p
+
+    let parseFiles = List.fold (fun state item -> sprintf "%s \"%s\"" state (escapePath item)) "" 
     let toCommandLine args = 
         match args with
         | Ls_remote(s, branch) -> sprintf "ls-remote --exit-code \"%s\" %s" s branch
@@ -48,7 +69,7 @@ module HandleGitArguments =
                 (match types with
                 | Local -> ""
                 | BranchType.Remote -> " -r"
-                | All -> " -a")
+                | BranchType.All -> " -a")
 
         | Remote (remoteType) ->
             sprintf "remote %s" 
@@ -56,9 +77,10 @@ module HandleGitArguments =
                 | ListVerbose -> "-v"
                 | Rename(from, toName) -> sprintf "rename %s %s" from toName
                 | Remove(name) -> sprintf "rm %s" name
-                | Add(name, url) -> sprintf "add %s %s" name url)
+                | RemoteType.Add(name, url) -> sprintf "add %s %s" name url)
 
         | Fetch(url, branch) -> sprintf "fetch --progress \"%s\" %s" url branch
+        | Push(url, branch) -> sprintf "push --progress \"%s\" %s" url branch
 
         | Rebase (rebaseType) ->
             sprintf "rebase %s" 
@@ -67,6 +89,26 @@ module HandleGitArguments =
                 | Abort -> "--abort"
                 | Skip -> "--skip"
                 | Start(from, toName) -> sprintf "%s %s" from toName)
+
+        | Add (addType, files) ->
+            sprintf "add %s --%s"
+                (match addType with
+                | NoOptions -> ""
+                | Update -> "-u"
+                | GitAddType.All -> "-A")
+                (files |> parseFiles)
+        | Commit (message) -> sprintf "commit -m \"%s\"" message
+        | Checkout (checkoutType) ->
+            sprintf "checkout %s"
+                (match checkoutType with
+                | Conflict(confType, files) ->
+                    sprintf "%s --%s"
+                        (match confType with
+                        | Ours -> "--ours"
+                        | Theirs -> "--theirs")
+                        (files |> parseFiles)
+                | CheckoutType.Branch(name) -> name)
+                    
 
     let possibleGitPaths = 
         [ "/usr/bin/git";
@@ -81,11 +123,11 @@ module HandleGitArguments =
         fun () -> 
                 if (!gitPath = null) then 
                     gitPath := 
-                        match 
+                        (match 
                             possibleGitPaths
                                 |> List.tryFind (fun path -> File.Exists(path)) with
-                        | Some(foundPath) -> foundPath
-                        | None -> "git"
+                        | Option.Some(foundPath) -> foundPath
+                        | Option.None -> "git")
 
                 !gitPath
 
@@ -104,8 +146,8 @@ type GitFileStatus = {
     Status : GitStatusType;
     Path : string }
 type GitStatus =   { 
-        File1 : GitFileStatus;
-        File2 : GitFileStatus;
+        Local : GitFileStatus;
+        Server : GitFileStatus;
     }
 
 type GitBranch = {
@@ -217,8 +259,7 @@ type GitProcess(workingDir:string, gitArguments) =
             let builder = new System.Text.StringBuilder()
             gitProcess.ErrorDataReceived 
                 |> Event.add (fun data ->
-                    
-                    printf "Received Error Line %s\n" data.Data
+                    logVerb "Received Error Line: %s\n" (if data.Data = null then "{NULL}" else data.Data)
                     if data.Data <> null then builder.AppendLine(data.Data) |> ignore)
 
             let start = gitProcess.Start()
@@ -245,9 +286,10 @@ type GitProcess(workingDir:string, gitArguments) =
             let c = new System.Collections.Generic.List<_>()
             gitProcess.OutputDataReceived 
                 |> Event.add (fun data ->
-                    match lineReceived(data.Data) with
-                    | Some t -> c.Add(t)
-                    | None -> ()
+                    logVerb "Received Data Line: %s\n" (if data.Data = null then "{NULL}" else data.Data)
+                    match lineReceived(data.Data) with                    
+                    | Option.Some t -> c.Add(t)
+                    | Option.None -> ()
                     )
             
             do! x.RunAsync(fun () ->
@@ -263,8 +305,8 @@ type GitProcess(workingDir:string, gitArguments) =
             gitProcess.ErrorDataReceived 
                 |> Event.add (fun data ->
                     match errorReceived(data.Data) with
-                    | Some t -> c.Add(t)
-                    | None -> ()
+                    | Option.Some t -> c.Add(t)
+                    | Option.None -> ()
                     )
             
             let! output = x.RunWithOutputAsync(lineReceived)
@@ -276,14 +318,14 @@ type GitProcess(workingDir:string, gitArguments) =
             use gitProc = new GitProcess(location, Status)
             return!
                 gitProc.RunWithOutputAsync(fun l ->
-                    if (System.String.IsNullOrEmpty(l)) then None
+                    if (System.String.IsNullOrEmpty(l)) then Option.None
                     else
                         let p1, p2 = HandleGitData.convertArrowPath (l.Substring(3))
                         let s1 = HandleGitData.convertToStatus l.[0]
                         let s2 = HandleGitData.convertToStatus l.[1]
-                        Some { 
-                            File1 = { Status = s1; Path = p1}; 
-                            File2 = { Status = s2; Path = p2}
+                        Option.Some { 
+                            Local = { Status = s1; Path = p1}; 
+                            Server = { Status = s2; Path = p2}
                         }
                 )
         }
@@ -296,8 +338,8 @@ type GitProcess(workingDir:string, gitArguments) =
         async {
             use gitProc = new GitProcess(location, Ls_remote(uri, branch))
             let! output = gitProc.RunWithOutputAsync(fun l -> 
-                if (System.String.IsNullOrEmpty(l)) then None
-                else Some l
+                if (System.String.IsNullOrEmpty(l)) then Option.None
+                else Option.Some l
                 )
 
             return output.[0].Substring(0,40)
@@ -320,9 +362,9 @@ type GitProcess(workingDir:string, gitArguments) =
             use gitProc = new GitProcess(location, Branch(types))
             return!
                 gitProc.RunWithOutputAsync(fun l ->
-                    if (System.String.IsNullOrEmpty(l)) then None
+                    if (System.String.IsNullOrEmpty(l)) then Option.None
                     else
-                        Some {
+                        Option.Some {
                             IsSelected = (l.[0] = '*');
                             Name = l.Substring(2) 
                         }
@@ -332,16 +374,18 @@ type GitProcess(workingDir:string, gitArguments) =
     static member RunGitRemoteAsync(location, types) = 
         async {
             use gitProc = new GitProcess(location, Remote(types))
+            
             return!
                 gitProc.RunWithOutputAsync(fun l ->
-                    if (System.String.IsNullOrEmpty(l)) then None
+                    if l = null || l.Length = 0 
+                    then Option.None
                     else
                         let items = 
-                            l.Split([|' '|])
-                                |> Seq.filter (fun e -> not (System.String.IsNullOrWhiteSpace e))
+                            l.Split([|' '; '\t'|])
                                 |> Seq.map (fun e -> e.Trim())
+                                |> Seq.filter (fun e -> not (System.String.IsNullOrWhiteSpace e))
                                 |> Seq.toArray
-                        Some {
+                        Option.Some {
                             Name = items.[0];
                             Url = items.[1];
                             Type = 
@@ -351,17 +395,14 @@ type GitProcess(workingDir:string, gitArguments) =
                         }
                 )
         }
-
-    static member RunGitFetchAsync(location, url, branch, onProcessChange) = 
+    static member private RunProgressGitCommand(gitProc:GitProcess, onProcessChange) = 
         async {
-            use gitProc = new GitProcess(location, GitArguments.Fetch(url, branch))
-            
             let progressRegex = 
                 new System.Text.RegularExpressions.Regex (
                     @"([0-9]+)%", 
                     System.Text.RegularExpressions.RegexOptions.Compiled);
             return!
-                gitProc.RunWithErrorOutputAsync((fun o -> None), fun e ->
+                gitProc.RunWithErrorOutputAsync((fun o -> Option.None), fun e ->
                     if not (System.String.IsNullOrEmpty(e)) then 
                         let matching = progressRegex.Match(e)
                         if (matching.Success) then
@@ -373,13 +414,40 @@ type GitProcess(workingDir:string, gitArguments) =
                                         compressingPart
                                      else
                                         1.0 - compressingPart))
-                    None
+                    Option.None
                 )
         }
-
-    static member RunGitRebaseAsync(location, fromBranch, intoBranch) = 
+    static member RunGitFetchAsync(location, url, branch, onProcessChange) = 
         async {
-            use gitProc = new GitProcess(location, GitArguments.Rebase(Start(fromBranch, intoBranch)))
-            do!
-                gitProc.RunAsync(id)
+            use gitProc = new GitProcess(location, GitArguments.Fetch(url, branch))
+            do! GitProcess.RunProgressGitCommand(gitProc, onProcessChange) |> Async.Ignore
+        }
+
+    static member RunGitRebaseAsync(location, rebaseType) = 
+        async {
+            use gitProc = new GitProcess(location, GitArguments.Rebase(rebaseType))
+            do! gitProc.RunAsync(id)
+        }
+
+    static member RunGitAddAsync(location, addOption, files) = 
+        async {
+            use gitProc = new GitProcess(location, GitArguments.Add(addOption, files))
+            do! gitProc.RunAsync(id)
+        }
+
+    static member RunGitCommitAsync(location, message) = 
+        async {
+            use gitProc = new GitProcess(location, GitArguments.Commit(message))
+            do! gitProc.RunAsync(id)
+        }
+
+    static member RunGitPushAsync(location, url, branch, onProcessChange) = 
+        async {
+            use gitProc = new GitProcess(location, GitArguments.Push(url, branch))
+            do! GitProcess.RunProgressGitCommand(gitProc, onProcessChange) |> Async.Ignore
+        }
+    static member RunGitCheckoutAsync(location, checkoutType) = 
+        async {
+            use gitProc = new GitProcess(location, GitArguments.Checkout(checkoutType))
+            do! gitProc.RunAsync(id)
         }

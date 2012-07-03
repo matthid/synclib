@@ -49,17 +49,17 @@ type RepositoryFolder(folder : ManagedFolderInfo, localWatcher : IChangeWatcher,
                                 yield inbox.Receive()
                         }
                         |> Async.Parallel
-                    
-                    // Make sure SyncDowns are prefered over SyncUp
-                    // And also make sure we do not spam our queue
-                    for msg in
-                        allmsgs |> Set.ofSeq  |> Seq.sort |> Seq.toList |> List.rev do
-                        do!
-                            match msg with
-                            | DoSyncUp -> 
-                                doTask SyncState.SyncUp (fun () -> x.StartSyncUp())
-                            | DoSyncDown ->
-                                doTask SyncState.SyncDown (fun () -> x.StartSyncDown())
+                    if (isStarted) then
+                        // Make sure SyncDowns are prefered over SyncUp
+                        // And also make sure we do not spam our queue
+                        for msg in
+                            allmsgs |> Set.ofSeq  |> Seq.sort |> Seq.toList |> List.rev do
+                            do!
+                                match msg with
+                                | DoSyncUp -> 
+                                    doTask SyncState.SyncUp (fun () -> x.StartSyncUp())
+                                | DoSyncDown ->
+                                    doTask SyncState.SyncDown (fun () -> x.StartSyncDown())
                                        
                     return! loop()
                 }
