@@ -1,0 +1,4 @@
+﻿namespace SyncLib
+
+type ToolProcess()
+

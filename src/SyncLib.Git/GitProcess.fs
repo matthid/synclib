@@ -315,6 +315,28 @@ type GitProcess(workingDir:string, gitArguments) =
             return output, c
         }
 
+    static member private RunProgressGitCommand(gitProc:GitProcess, onProcessChange) = 
+        async {
+            let progressRegex = 
+                new System.Text.RegularExpressions.Regex (
+                    @"([0-9]+)%", 
+                    System.Text.RegularExpressions.RegexOptions.Compiled);
+            return!
+                gitProc.RunWithErrorOutputAsync((fun o -> Option.None), fun e ->
+                    if not (System.String.IsNullOrEmpty(e)) then 
+                        let matching = progressRegex.Match(e)
+                        if (matching.Success) then
+                            let progress = System.Double.Parse(matching.Groups.[1].Value) / 100.0
+                            let compressingPart = 0.25;
+                            onProcessChange
+                                (progress * 
+                                    (if (e.StartsWith("Compressing")) then
+                                        compressingPart
+                                     else
+                                        1.0 - compressingPart))
+                    Option.None
+                )
+        }
     static member RunGitStatusAsync(location) = 
         async {
             use gitProc = new GitProcess(location, Status)
@@ -397,28 +419,7 @@ type GitProcess(workingDir:string, gitArguments) =
                         }
                 )
         }
-    static member private RunProgressGitCommand(gitProc:GitProcess, onProcessChange) = 
-        async {
-            let progressRegex = 
-                new System.Text.RegularExpressions.Regex (
-                    @"([0-9]+)%", 
-                    System.Text.RegularExpressions.RegexOptions.Compiled);
-            return!
-                gitProc.RunWithErrorOutputAsync((fun o -> Option.None), fun e ->
-                    if not (System.String.IsNullOrEmpty(e)) then 
-                        let matching = progressRegex.Match(e)
-                        if (matching.Success) then
-                            let progress = System.Double.Parse(matching.Groups.[1].Value) / 100.0
-                            let compressingPart = 0.25;
-                            onProcessChange
-                                (progress * 
-                                    (if (e.StartsWith("Compressing")) then
-                                        compressingPart
-                                     else
-                                        1.0 - compressingPart))
-                    Option.None
-                )
-        }
+    
     static member RunGitFetchAsync(location, url, branch, onProcessChange) = 
         async {
             use gitProc = new GitProcess(location, GitArguments.Fetch(url, branch))

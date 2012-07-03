@@ -5,12 +5,12 @@
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProductVersion>8.0.30703</ProductVersion>
     <SchemaVersion>2.0</SchemaVersion>
-    <ProjectGuid>{0096aae6-3902-473d-b419-f6f9931d3b86}</ProjectGuid>
+    <ProjectGuid>{f7dbf542-b3f1-4163-ac29-bf16c6633211}</ProjectGuid>
     <OutputType>Library</OutputType>
-    <RootNamespace>SparkleLib.FSharp</RootNamespace>
-    <AssemblyName>SyncLib</AssemblyName>
+    <RootNamespace>SyncLib.Svn</RootNamespace>
+    <AssemblyName>SyncLib.Svn</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
-    <Name>SyncLib</Name>
+    <Name>SyncLib.Svn</Name>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -20,7 +20,7 @@
     <OutputPath>bin\Debug\</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
-    <DocumentationFile>bin\Debug\SparkleLib.FSharp.XML</DocumentationFile>
+    <DocumentationFile>bin\Debug\SyncLib.Svn.XML</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
@@ -29,7 +29,7 @@
     <OutputPath>bin\Release\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
-    <DocumentationFile>bin\Release\SparkleLib.FSharp.XML</DocumentationFile>
+    <DocumentationFile>bin\Release\SyncLib.Svn.XML</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />
@@ -37,21 +37,10 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="System.Numerics" />
-    <Reference Include="Yaaf.Utils">
-      <HintPath>..\..\..\yaaf-utils\bin\Debug\Clr4\Yaaf.Utils.dll</HintPath>
-    </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="Helpers.fs" />
-    <Compile Include="ManagedFolder.fs" />
-    <Compile Include="ChangeWatcher.fs" />
-    <Compile Include="ToolProcess.fs" />
-    <Compile Include="RepositoryFolder.fs" />
+    <Compile Include="SvnProcess.fs" />
     <None Include="Script.fsx" />
-    <None Include="..\..\build.fsx">
-      <Link>build.fsx</Link>
-    </None>
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\FSharp\1.0\Microsoft.FSharp.Targets" Condition="!Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
   <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft F#\v4.0\Microsoft.FSharp.Targets" Condition=" Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />

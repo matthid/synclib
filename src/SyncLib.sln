@@ -7,6 +7,8 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "SyncLib.Git", "SyncLib.Git\
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "ConsoleSync", "ConsoleSync\ConsoleSync.fsproj", "{1A44D5F0-890A-4EE0-B9DB-7E5A6D4774AF}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "SyncLib.Svn", "SyncLib.Svn\SyncLib.Svn.fsproj", "{F7DBF542-B3F1-4163-AC29-BF16C6633211}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -47,6 +49,16 @@ Global
 		{1A44D5F0-890A-4EE0-B9DB-7E5A6D4774AF}.Release|Mixed Platforms.Build.0 = Release|x86
 		{1A44D5F0-890A-4EE0-B9DB-7E5A6D4774AF}.Release|x86.ActiveCfg = Release|x86
 		{1A44D5F0-890A-4EE0-B9DB-7E5A6D4774AF}.Release|x86.Build.0 = Release|x86
+		{F7DBF542-B3F1-4163-AC29-BF16C6633211}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{F7DBF542-B3F1-4163-AC29-BF16C6633211}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{F7DBF542-B3F1-4163-AC29-BF16C6633211}.Debug|Mixed Platforms.ActiveCfg = Debug|Any CPU
+		{F7DBF542-B3F1-4163-AC29-BF16C6633211}.Debug|Mixed Platforms.Build.0 = Debug|Any CPU
+		{F7DBF542-B3F1-4163-AC29-BF16C6633211}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{F7DBF542-B3F1-4163-AC29-BF16C6633211}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{F7DBF542-B3F1-4163-AC29-BF16C6633211}.Release|Any CPU.Build.0 = Release|Any CPU
+		{F7DBF542-B3F1-4163-AC29-BF16C6633211}.Release|Mixed Platforms.ActiveCfg = Release|Any CPU
+		{F7DBF542-B3F1-4163-AC29-BF16C6633211}.Release|Mixed Platforms.Build.0 = Release|Any CPU
+		{F7DBF542-B3F1-4163-AC29-BF16C6633211}.Release|x86.ActiveCfg = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

@@ -43,7 +43,6 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="Helpers.fs" />
     <Compile Include="GitProcess.fs" />
     <Compile Include="GitRepositoryFolder.fs" />
     <Compile Include="GitBackendManager.fs" />
