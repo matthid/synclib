@@ -272,6 +272,8 @@ type GitProcess(workingDir:string, gitArguments) =
 
             // Wait for exit event
             let exitCode = gitProcess.ExitCode
+            // TODO: Add normal output to exception 
+            // (this would also make the afterStarted function redundand)
             if exitCode <> 0 then raise (GitProcessFailed (builder.ToString()))
         }
             
