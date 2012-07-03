@@ -43,6 +43,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) =
             //TODO: Fetch remote branch (with progress bar)
 
 
+
             //TODO: Resolve conflicts
 
             return ()
