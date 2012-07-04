@@ -105,7 +105,8 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
             try
                 do! GitProcess.RunGitStatusAsync(folder.FullPath) |> Async.Ignore
             with
-            | GitProcessFailed(s) when s.Contains "fatal: Not a git repository (or any of the parent directories): .git" ->
+            | ToolProcessFailed(code, output, error) 
+                when error.Contains "fatal: Not a git repository (or any of the parent directories): .git" ->
                 logInfo "%s is no Repro so init one" folder.Name
                 do! GitProcess.RunGitInitAsync(folder.FullPath)
 
@@ -150,10 +151,11 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                 logInfo "Starting SyncDown-Merging of %s" folder.Name
                 do! GitProcess.RunGitRebaseAsync(folder.FullPath, Start("FETCH_HEAD", "master"))
             with
-                | GitProcessFailed(s) ->
-                    logWarn "Conflict while Down-Merging of %s" folder.Name
+                | ToolProcessFailed(exitCode, o, e) ->
+                    let errMsg = (sprintf "Code %d, Output: %s, Error %s" exitCode o e)
+                    logWarn "Conflict while Down-Merging of %s: %s" folder.Name errMsg
                     // Conflict
-                    syncConflict.Trigger (SyncConflict.Unknown s)
+                    syncConflict.Trigger (SyncConflict.Unknown errMsg)
                     
                     // Resolve conflict
                     do! resoveConflicts()
@@ -173,11 +175,12 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                         
                 progressChanged.Trigger 1.0
             with 
-                | GitProcessFailed(s) ->
+                | ToolProcessFailed(exitCode, o ,e) ->
                     // Conflict
-                    logWarn "Conflict while Sync-Up of %s: %s" folder.Name s
+                    let errorMsg = (sprintf "Code %d, Output: %s, Error %s" exitCode o e)
+                    logWarn "Conflict while Sync-Up of %s: %s" folder.Name errorMsg
                     
-                    syncConflict.Trigger (SyncConflict.Unknown s)
+                    syncConflict.Trigger (SyncConflict.Unknown errorMsg)
                     x.RequestSyncDown() // We handle conflicts there
                     x.RequestSyncUp()
             

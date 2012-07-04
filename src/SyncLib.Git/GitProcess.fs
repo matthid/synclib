@@ -4,6 +4,7 @@ namespace SyncLib.Git
 
 open System.Diagnostics
 open System.IO
+open SyncLib
 open SyncLib.Helpers
 open SyncLib.Helpers.Logger
 
@@ -218,104 +219,11 @@ module HandleGitData =
             let cp = convertToResovedPath p
             cp, cp
 
-exception GitProcessFailed of string
+module GitProcess = 
+    let createGitProc (loc:string) (args:GitArguments) = 
+        new ToolProcess(HandleGitArguments.locateGit(), loc, HandleGitArguments.toCommandLine(args))
 
-type GitProcess(workingDir:string, gitArguments) =
-    let gitArguments = gitArguments
-    let gitProcess = 
-        new Process(
-            StartInfo =
-                new ProcessStartInfo(
-                    FileName = HandleGitArguments.locateGit(),
-                    RedirectStandardOutput = true,
-                    RedirectStandardError = true,
-                    UseShellExecute = false,
-                    WorkingDirectory = workingDir,
-                    CreateNoWindow = true,
-                    Arguments = HandleGitArguments.toCommandLine gitArguments))
-
-    member x.Dispose disposing = 
-        if (disposing) then
-            gitProcess.Dispose()
-
-    override x.Finalize() = 
-        x.Dispose(false)
-    interface System.IDisposable with
-        member x.Dispose() = 
-            x.Dispose(true)
-            System.GC.SuppressFinalize(x)
-
-
-    member x.RunAsync(afterStarted) = 
-        async {
-            // subscribe Exit event
-            gitProcess.EnableRaisingEvents <- true
-            
-            let exitEvent = 
-                gitProcess.Exited 
-                    |> Async.AwaitEvent
-            
-            // Collect error stream
-            let builder = new System.Text.StringBuilder()
-            gitProcess.ErrorDataReceived 
-                |> Event.add (fun data ->
-                    logVerb "Received Error Line: %s\n" (if data.Data = null then "{NULL}" else data.Data)
-                    if data.Data <> null then builder.AppendLine(data.Data) |> ignore)
-
-            let start = gitProcess.Start()
-            gitProcess.BeginErrorReadLine()
-            afterStarted()
-            let! exit = exitEvent
-            gitProcess.WaitForExit()
-            gitProcess.CancelErrorRead()
-
-
-            // Wait for exit event
-            let exitCode = gitProcess.ExitCode
-            // TODO: Add normal output to exception 
-            // (this would also make the afterStarted function redundand)
-            if exitCode <> 0 then raise (GitProcessFailed (builder.ToString()))
-        }
-            
-    member x.StandardInput
-        with get() = 
-            gitProcess.StandardInput
-            
-
-    member x.RunWithOutputAsync(lineReceived) = 
-        async {
-            
-            let c = new System.Collections.Generic.List<_>()
-            gitProcess.OutputDataReceived 
-                |> Event.add (fun data ->
-                    logVerb "Received Data Line: %s\n" (if data.Data = null then "{NULL}" else data.Data)
-                    match lineReceived(data.Data) with                    
-                    | Option.Some t -> c.Add(t)
-                    | Option.None -> ()
-                    )
-            
-            do! x.RunAsync(fun () ->
-                gitProcess.BeginOutputReadLine())
-            
-            gitProcess.CancelOutputRead()
-            return c
-        }
-
-    member x.RunWithErrorOutputAsync(lineReceived, errorReceived) = 
-        async {
-            let c = new System.Collections.Generic.List<_>()
-            gitProcess.ErrorDataReceived 
-                |> Event.add (fun data ->
-                    match errorReceived(data.Data) with
-                    | Option.Some t -> c.Add(t)
-                    | Option.None -> ()
-                    )
-            
-            let! output = x.RunWithOutputAsync(lineReceived)
-            return output, c
-        }
-
-    static member private RunProgressGitCommand(gitProc:GitProcess, onProcessChange) = 
+    let runGitProgressCommand(gitProc:ToolProcess, onProcessChange) = 
         async {
             let progressRegex = 
                 new System.Text.RegularExpressions.Regex (
@@ -337,9 +245,9 @@ type GitProcess(workingDir:string, gitArguments) =
                     Option.None
                 )
         }
-    static member RunGitStatusAsync(location) = 
+    let RunGitStatusAsync(location) = 
         async {
-            use gitProc = new GitProcess(location, Status)
+            use gitProc = createGitProc location Status
             return!
                 gitProc.RunWithOutputAsync(fun l ->
                     if (System.String.IsNullOrEmpty(l)) then Option.None
@@ -354,13 +262,13 @@ type GitProcess(workingDir:string, gitArguments) =
                 )
         }
 
-    static member RunGitStatus(location) = 
-        GitProcess.RunGitStatusAsync(location)
+    let RunGitStatus(location) = 
+        RunGitStatusAsync(location)
             |> Async.RunSynchronously
 
-    static member RunGitLsRemoteAsync(location, uri, branch) = 
+    let RunGitLsRemoteAsync(location, uri, branch) = 
         async {
-            use gitProc = new GitProcess(location, Ls_remote(uri, branch))
+            use gitProc = createGitProc location (Ls_remote(uri, branch))
             let! output = gitProc.RunWithOutputAsync(fun l -> 
                 if (System.String.IsNullOrEmpty(l)) then Option.None
                 else Option.Some l
@@ -369,21 +277,21 @@ type GitProcess(workingDir:string, gitArguments) =
             return output.[0].Substring(0,40)
         }
 
-    static member RunGitLsRemote(location, uri, branch) = 
-        GitProcess.RunGitLsRemoteAsync(location, uri, branch)
+    let RunGitLsRemote(location, uri, branch) = 
+        RunGitLsRemoteAsync(location, uri, branch)
             |> Async.RunSynchronously
       
 
-    static member RunGitInitAsync(location) = 
+    let RunGitInitAsync(location) = 
         async {
-            use gitProc = new GitProcess(location, Init)
-            do! gitProc.RunAsync(id)
+            use gitProc = createGitProc location Init
+            do! gitProc.RunAsync()
             return ()
         }
 
-    static member RunGitBranchAsync(location, types) = 
+    let RunGitBranchAsync(location, types) = 
         async {
-            use gitProc = new GitProcess(location, Branch(types))
+            use gitProc = createGitProc location (Branch(types))
             return!
                 gitProc.RunWithOutputAsync(fun l ->
                     if (System.String.IsNullOrEmpty(l)) then Option.None
@@ -395,9 +303,9 @@ type GitProcess(workingDir:string, gitArguments) =
                 )
         }
 
-    static member RunGitRemoteAsync(location, types) = 
+    let RunGitRemoteAsync(location, types) = 
         async {
-            use gitProc = new GitProcess(location, Remote(types))
+            use gitProc = createGitProc location (Remote(types))
             
             return!
                 gitProc.RunWithOutputAsync(fun l ->
@@ -420,37 +328,37 @@ type GitProcess(workingDir:string, gitArguments) =
                 )
         }
     
-    static member RunGitFetchAsync(location, url, branch, onProcessChange) = 
+    let RunGitFetchAsync(location, url, branch, onProcessChange) = 
         async {
-            use gitProc = new GitProcess(location, GitArguments.Fetch(url, branch))
-            do! GitProcess.RunProgressGitCommand(gitProc, onProcessChange) |> Async.Ignore
+            use gitProc = createGitProc location (GitArguments.Fetch(url, branch))
+            do! runGitProgressCommand(gitProc, onProcessChange) |> Async.Ignore
         }
 
-    static member RunGitRebaseAsync(location, rebaseType) = 
+    let RunGitRebaseAsync(location, rebaseType) = 
         async {
-            use gitProc = new GitProcess(location, GitArguments.Rebase(rebaseType))
-            do! gitProc.RunAsync(id)
+            use gitProc = createGitProc location (GitArguments.Rebase(rebaseType))
+            do! gitProc.RunAsync()
         }
 
-    static member RunGitAddAsync(location, addOption, files) = 
+    let RunGitAddAsync(location, addOption, files) = 
         async {
-            use gitProc = new GitProcess(location, GitArguments.Add(addOption, files))
-            do! gitProc.RunAsync(id)
+            use gitProc = createGitProc location (GitArguments.Add(addOption, files))
+            do! gitProc.RunAsync()
         }
 
-    static member RunGitCommitAsync(location, message) = 
+    let RunGitCommitAsync(location, message) = 
         async {
-            use gitProc = new GitProcess(location, GitArguments.Commit(message))
-            do! gitProc.RunAsync(id)
+            use gitProc = createGitProc location (GitArguments.Commit(message))
+            do! gitProc.RunAsync()
         }
 
-    static member RunGitPushAsync(location, url, branch, onProcessChange) = 
+    let RunGitPushAsync(location, url, branch, onProcessChange) = 
         async {
-            use gitProc = new GitProcess(location, GitArguments.Push(url, branch))
-            do! GitProcess.RunProgressGitCommand(gitProc, onProcessChange) |> Async.Ignore
+            use gitProc = createGitProc location (GitArguments.Push(url, branch))
+            do! runGitProgressCommand(gitProc, onProcessChange) |> Async.Ignore
         }
-    static member RunGitCheckoutAsync(location, checkoutType) = 
+    let RunGitCheckoutAsync(location, checkoutType) = 
         async {
-            use gitProc = new GitProcess(location, GitArguments.Checkout(checkoutType))
-            do! gitProc.RunAsync(id)
+            use gitProc = createGitProc location (GitArguments.Checkout(checkoutType))
+            do! gitProc.RunAsync()
         }
