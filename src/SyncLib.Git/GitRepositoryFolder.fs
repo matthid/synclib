@@ -128,6 +128,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
             return ()
         }
 
+    /// The SyncDown Process
     let syncDown() =
         async {
             progressChanged.Trigger 0.0
@@ -160,6 +161,8 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                     // Resolve conflict
                     do! resoveConflicts()
         }
+
+    /// The Upsync Process
     let syncUp() = async {
             try
                 logInfo "Starting SyncUp of %s" folder.Name
