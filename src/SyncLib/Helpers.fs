@@ -12,132 +12,144 @@ module Seq =
                 yield e.Current
         }
 
+/// Allows tracing of async workflows
 module AsyncTrace = 
-    
-    
-    type IAsyncTraceBuilder<'Info> =
-        abstract member Info : 'Info option with get
-        abstract member SetInfo : 'Info -> unit
-        abstract member Capture : System.Collections.Generic.List<IAsyncTraceBuilder<'Info>> -> unit
-    
-    type BuilderList<'Info> = System.Collections.Generic.List<IAsyncTraceBuilder<'Info>>
+    type IAsyncTrace<'Info> = 
+        abstract member Info : 'Info option with get,set
 
-    type AsyncTraceBuilder<'Info, 'T>(info:'Info option, myAsync:Async<'T>, list:BuilderList<'Info>) as x = 
+        abstract member Capture : System.Collections.Generic.List<IAsyncTrace<'Info>> -> unit
+
+    type TraceList<'Info> = System.Collections.Generic.List<IAsyncTrace<'Info>>
+    type AsyncTrace<'Info, 'T>(info:'Info option, execute:Async<'Info option * 'T>) = 
         let mutable info = info
-        let mutable internalList = list
-        let builded = new BuilderList<'Info>()
-        let syncList() = 
-            // Sync List
-            printfn "Sync %d items" (list|>Seq.length)
-            let dataItems = 
-                list 
-                    |> Seq.filter (fun f -> f.Info.IsSome)
-            
-            let mutable data = None
-            for dataItem in dataItems do
-                let info = dataItem.Info
-                if (info.IsSome) then
-                    if (data.IsSome && obj.ReferenceEquals(data.Value, info.Value)) then 
-                        failwith "multiple different data!"
-                    data <- info
-            if (data.IsSome) then
-                for dataItem in list |> Seq.filter (fun f -> f.Info.IsNone) do
-                    dataItem.SetInfo data.Value
+        let mutable list = new TraceList<'Info>() 
+        interface IAsyncTrace<'Info> with
+            member x.Info 
+                with get() = info
+                and set(newValue) = info <- newValue 
+            member x.Capture (newList:TraceList<'Info>) =
+                if not (newList.Contains(x)) then newList.Add(x)
+                for current in list do
+                    if not (newList.Contains(current)) then 
+                        newList.Add(current)
+                        current.Capture newList
+                                    
+                list <- newList
 
+                let dataItems = 
+                    list 
+                        |> Seq.filter (fun f -> f.Info.IsSome)
+                            
+                let mutable data = None
+                for dataItem in dataItems do
+                    let info = dataItem.Info
+                    if (info.IsSome) then
+                        if (data.IsSome && obj.ReferenceEquals(data.Value, info.Value)) then 
+                            failwith "multiple different data!"
+                        data <- info
+                if (data.IsSome) then
+                    for dataItem in list |> Seq.filter (fun f -> f.Info.IsNone) do
+                        dataItem.Info <- Some data.Value
 
-        let buildTrace info async = 
-            let b = new AsyncTraceBuilder<'Info, 'Y>(info, async, internalList)
+        member internal x.Async = execute
+        member x.SetInfo value = info <- Some value
+    
+
+    type AsyncTraceBuilder<'Info, 'T>() as x = 
+        let internalList = new TraceList<'Info>()
+        let builded = new TraceList<'Info>()
+
+        let buildTrace async = 
+            let b = new AsyncTrace<'Info, 'Y>(None, async)
+            (b :> IAsyncTrace<'Info>).Capture internalList
             builded.Add(b)
-            internalList.Add(b)
             b
             
 
-        let bind (value:AsyncTraceBuilder<'Info, 'X>) (f:'X -> AsyncTraceBuilder<'Info, 'Y>) =
-            value.Capture internalList
-            syncList()
+        let bind (value:AsyncTrace<'Info, 'X>) (f:'X -> AsyncTrace<'Info, 'Y>) =
+            (value :> IAsyncTrace<'Info>).Capture internalList
             
-            let rec tracer =
-                buildTrace 
-                    info 
-                    (async.Bind(
-                        value.Async, 
-                        (fun (t) -> 
-                            let inner = f(t)
-                            inner.SetInfo tracer.Info.Value
-                            inner.Async)))
-            //tracer.AddSubBuilder value
-            //subBuilder.Add(value)
-            tracer
+            buildTrace 
+                (async.Bind(
+                    value.Async, 
+                    (fun (info, t) -> 
+                        let inner = f(t)
+                        (inner:>IAsyncTrace<'Info>).Info <- (value:>IAsyncTrace<'Info>).Info
+                        inner.Async)))
 
-        let delay (f:unit -> AsyncTraceBuilder<'Info, 'Y>) = 
-            syncList()
-            buildTrace info (async.Delay (fun () -> (f()).Async))
+        let delay (f:unit -> AsyncTrace<'Info, 'Y>) = 
+            buildTrace (async.Delay (fun () -> (f()).Async))
 
         let returnN t = 
-            syncList()
-            buildTrace info (async.Return(t))
+            buildTrace (
+                async {
+                    let! d = async.Return(t)
+                    return None, d
+                })
 
-        let returnFrom (t:AsyncTraceBuilder<'Info, _>) = 
-            syncList()
-            t.Capture internalList
-            buildTrace info (async.ReturnFrom(t.Async))
+        let returnFrom (t:AsyncTrace<'Info, _>) = 
+            (t:> IAsyncTrace<'Info>).Capture internalList
+            buildTrace (async.ReturnFrom(t.Async))
 
-        let combine (item1:AsyncTraceBuilder<'Info, _>) (item2:AsyncTraceBuilder<'Info, _>) = 
-            syncList()
-            item1.Capture internalList
-            item2.Capture internalList
-            buildTrace info (async.Combine(item1.Async, item2.Async))
+        let combine (item1:AsyncTrace<'Info, unit>) (item2:AsyncTrace<'Info, _>) = 
+            (item1:> IAsyncTrace<'Info>).Capture internalList
+            (item2:> IAsyncTrace<'Info>).Capture internalList
+            buildTrace (
+                async.Combine(
+                    async {
+                        let! d = item1.Async
+                        
+                        return()
+                    }, item2.Async))
 
-        let forComp (sequence:seq<'X>) (work:'X -> AsyncTraceBuilder<'Info, unit>) = 
-            syncList()
-            buildTrace info (async.For(sequence, (fun t -> (work t).Async)))
+        let forComp (sequence:seq<'X>) (work:'X -> AsyncTrace<'Info, unit>) = 
+            buildTrace (
+                async { 
+                    let! t = 
+                        async.For
+                            (sequence, 
+                            (fun t -> 
+                                async {
+                                    do! (work t).Async |> Async.Ignore
+                                    return ()
+                                })) 
+                    return None, t } )
 
-        let tryFinally (item:AsyncTraceBuilder<'Info,_>) f = 
-            syncList()
-            item.Capture internalList
-            buildTrace info (async.TryFinally(item.Async, f))
+        let tryFinally (item:AsyncTrace<'Info,_>) f = 
+            (item:> IAsyncTrace<'Info>).Capture internalList
+            buildTrace (async.TryFinally(item.Async, f))
         
-        let tryWith (item: AsyncTraceBuilder<'Info,_>) (exnHandler:exn ->  AsyncTraceBuilder<'Info,_>) = 
-            syncList()
-            item.Capture internalList
-            buildTrace info (async.TryWith(item.Async, (fun xn -> (exnHandler xn).Async)))
+        let tryWith (item: AsyncTrace<'Info,_>) (exnHandler:exn ->  AsyncTrace<'Info,_>) = 
+            (item:> IAsyncTrace<'Info>).Capture internalList
+            buildTrace (async.TryWith(item.Async, (fun xn -> (exnHandler xn).Async)))
         
-        let usingComp (item) (doWork:_-> AsyncTraceBuilder<'Info,_>) = 
-            syncList()
-            buildTrace info (async.Using(item, (fun t -> (doWork t).Async)))
+        let usingComp (item) (doWork:_-> AsyncTrace<'Info,_>) = 
+            buildTrace (async.Using(item, (fun t -> (doWork t).Async)))
 
-        let whileComp (item) (work: AsyncTraceBuilder<'Info,_>) = 
-            syncList()
-            work.Capture internalList
-            buildTrace info (async.While(item, work.Async))
-    
-        let zeroComp () = buildTrace info (async.Zero())
+        let whileComp (item) (work: AsyncTrace<'Info,_>) = 
+            (work:> IAsyncTrace<'Info>).Capture internalList
+            buildTrace 
+                (async {
+                    do! (async.While(
+                            item, 
+                            async {
+                                do! work.Async |> Async.Ignore
+                                return ()
+                            }))
+                    return None, ()
+                })
 
-        new() = AsyncTraceBuilder<'Info, 'T>(None, async { return Unchecked.defaultof<'T> }, new BuilderList<'Info>())
+        let zeroComp () = 
+            buildTrace 
+                (async {
+                    let! t = async.Zero()
+                    return None, t
+                })
 
-        interface IAsyncTraceBuilder<'Info> with
-            member x.Info
-                with get () = x.Info
-            member x.SetInfo value = x.SetInfoSimple value
-            member x.Capture list = x.Capture list
 
-        member private x.Capture (list:BuilderList<'Info>) : unit = 
-            
-            if not (list.Contains(x)) then list.Add(x)
-            for current in internalList do
-                if not (list.Contains(current)) then 
-                    list.Add(current)
-                    current.Capture list
-            
-            internalList <- list
-            for b in builded do 
-                b.Capture(list)
-                    
-            printfn "Capture..."
-
-        // AsyncTraceBuilder<'Info, 'T> * ('T -> AsyncTraceBuilder<'Info, 'U>) -> AsyncTraceBuilder<'Info, 'U>
+        // AsyncTrace<'Info, 'T> * ('T -> AsyncTrace<'Info, 'U>) -> AsyncTrace<'Info, 'U>
         member x.Bind(value, f) = bind value f
-        // (unit -> AsyncTraceBuilder<'Info,'T>) -> AsyncTraceBuilder<'Info,'T> 
+        // (unit -> AsyncTrace<'Info,'T>) -> AsyncTrace<'Info,'T> 
         member x.Delay(f) = delay f
         member x.Return(t) = returnN t
         member x.ReturnFrom(t) =  returnFrom t
@@ -149,55 +161,31 @@ module AsyncTrace =
         member x.While(t1,t2) = whileComp t1 t2
         member x.Zero() = zeroComp ()
 
-        member x.Info 
-            with get() : 'Info option = info
-        member x.SetInfo (value:'Info) : unit = 
-            info <- Some value
-            for inner in internalList do
-                inner.SetInfo value
-        member x.SetInfoSimple (value:'Info) : unit = 
-            info <- Some value
-
-        member x.Async with get() : Async<'T> = myAsync
 
     let asyncTrace() = new AsyncTraceBuilder<_,_>()
     
-    let traceInfo () : AsyncTraceBuilder<'a,_> =
+    let traceInfo () : AsyncTrace<'a,_> =
         asyncTrace() {
-            let b = asyncTrace() {return()}
+            let b = (asyncTrace() {return()})
             let! a = b // Small hack to get connected
             return 
-                match b.Info with
+                match (b:>IAsyncTrace<_>).Info with
                 | None -> 
                     failwith "Please set the info value via builder"
                 | Some v -> v : 'a 
         } 
 
-    let convertFromAsync asy = new AsyncTraceBuilder<_,_>(None, asy, new BuilderList<_>())
-    let convertToAsync (traceAsy:AsyncTraceBuilder<_,_>) = traceAsy.Async:Async<_>
-
-    type TestType = int
-    let testThisThing() = 
-        let asy = 
-            asyncTrace() {
-                let! info = traceInfo()
-                printfn "Found %d" info
-            }   
-        asy.SetInfo 20
-        printfn "beforeStart"
-        asy |> convertToAsync |> Async.RunSynchronously
-
-    let anotherFun ()  = 
-        asyncTrace() {
-            let! info = traceInfo()
-            let b = 
-                async {
-                    return 2
-                }
-            let! t = b |> convertFromAsync
-            return info
+    let convertFromAsync asy = 
+        new AsyncTrace<_,_>(None, 
+            async {
+                let! d = asy
+                return None, d
+            })
+    let convertToAsync (traceAsy:AsyncTrace<_,_>) = 
+        async {
+            let! info,d = traceAsy.Async
+            return d
         }
-
 
 module Logger = 
     let logHelper ty (s : string) = Yaaf.Utils.Logging.Logger.WriteLine("{0}", ty, s)
