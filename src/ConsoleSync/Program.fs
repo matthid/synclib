@@ -26,7 +26,10 @@ manager.SyncConflict
 
 manager.SyncError
     |> Event.add
-        (fun error -> printfn "Error: %s" (error.ToString()))
+        (fun error -> 
+            match error with
+            | ToolProcessFailed(errorCode, cmd, output, errorOutput) -> printfn "Unknown Tool Error(%s): %d, %s, %s" cmd errorCode output errorOutput
+            | _ -> printfn "Error: %s" (error.ToString()))
 
 manager.SyncStateChanged
     |> Event.add

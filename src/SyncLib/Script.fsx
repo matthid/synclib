@@ -7,3 +7,6 @@
 #r "SyncLib.dll"
 
 open SyncLib.Helpers.AsyncTrace
+open SyncLib.Helpers
+open System.Diagnostics
+

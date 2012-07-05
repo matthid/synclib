@@ -6,7 +6,7 @@ open System.Diagnostics
 open System.IO
 open SyncLib
 open SyncLib.Helpers
-open SyncLib.Helpers.Logger
+open SyncLib.Helpers.AsyncTrace
 
 type BranchType = 
     | Local
@@ -224,7 +224,7 @@ module GitProcess =
         new ToolProcess(HandleGitArguments.locateGit(), loc, HandleGitArguments.toCommandLine(args))
 
     let runGitProgressCommand(gitProc:ToolProcess, onProcessChange) = 
-        async {
+        asyncTrace() {
             let progressRegex = 
                 new System.Text.RegularExpressions.Regex (
                     @"([0-9]+)%", 
@@ -246,7 +246,7 @@ module GitProcess =
                 )
         }
     let RunGitStatusAsync(location) = 
-        async {
+        asyncTrace() {
             use gitProc = createGitProc location Status
             return!
                 gitProc.RunWithOutputAsync(fun l ->
@@ -264,10 +264,11 @@ module GitProcess =
 
     let RunGitStatus(location) = 
         RunGitStatusAsync(location)
+            |> convertToAsync
             |> Async.RunSynchronously
 
     let RunGitLsRemoteAsync(location, uri, branch) = 
-        async {
+        asyncTrace() {
             use gitProc = createGitProc location (Ls_remote(uri, branch))
             let! output = gitProc.RunWithOutputAsync(fun l -> 
                 if (System.String.IsNullOrEmpty(l)) then Option.None
@@ -279,18 +280,19 @@ module GitProcess =
 
     let RunGitLsRemote(location, uri, branch) = 
         RunGitLsRemoteAsync(location, uri, branch)
+            |> convertToAsync
             |> Async.RunSynchronously
       
 
     let RunGitInitAsync(location) = 
-        async {
+        asyncTrace() {
             use gitProc = createGitProc location Init
             do! gitProc.RunAsync()
             return ()
         }
 
     let RunGitBranchAsync(location, types) = 
-        async {
+        asyncTrace() {
             use gitProc = createGitProc location (Branch(types))
             return!
                 gitProc.RunWithOutputAsync(fun l ->
@@ -304,7 +306,7 @@ module GitProcess =
         }
 
     let RunGitRemoteAsync(location, types) = 
-        async {
+        asyncTrace() {
             use gitProc = createGitProc location (Remote(types))
             
             return!
@@ -329,36 +331,36 @@ module GitProcess =
         }
     
     let RunGitFetchAsync(location, url, branch, onProcessChange) = 
-        async {
+        asyncTrace() {
             use gitProc = createGitProc location (GitArguments.Fetch(url, branch))
-            do! runGitProgressCommand(gitProc, onProcessChange) |> Async.Ignore
+            do! runGitProgressCommand(gitProc, onProcessChange) |> AsyncTrace.Ignore
         }
 
     let RunGitRebaseAsync(location, rebaseType) = 
-        async {
+        asyncTrace() {
             use gitProc = createGitProc location (GitArguments.Rebase(rebaseType))
             do! gitProc.RunAsync()
         }
 
     let RunGitAddAsync(location, addOption, files) = 
-        async {
+        asyncTrace() {
             use gitProc = createGitProc location (GitArguments.Add(addOption, files))
             do! gitProc.RunAsync()
         }
 
     let RunGitCommitAsync(location, message) = 
-        async {
+        asyncTrace() {
             use gitProc = createGitProc location (GitArguments.Commit(message))
             do! gitProc.RunAsync()
         }
 
     let RunGitPushAsync(location, url, branch, onProcessChange) = 
-        async {
+        asyncTrace() {
             use gitProc = createGitProc location (GitArguments.Push(url, branch))
-            do! runGitProgressCommand(gitProc, onProcessChange) |> Async.Ignore
+            do! runGitProgressCommand(gitProc, onProcessChange) |> AsyncTrace.Ignore
         }
     let RunGitCheckoutAsync(location, checkoutType) = 
-        async {
+        asyncTrace() {
             use gitProc = createGitProc location (GitArguments.Checkout(checkoutType))
             do! gitProc.RunAsync()
         }

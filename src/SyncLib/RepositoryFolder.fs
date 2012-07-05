@@ -1,8 +1,12 @@
 ﻿namespace SyncLib
 
+open SyncLib.Helpers.AsyncTrace
+open SyncLib.Helpers
+
 type ProcessorMessage = 
     | DoSyncUp
     | DoSyncDown
+
 
 [<AbstractClass>]
 type RepositoryFolder(folder : ManagedFolderInfo, localWatcher : IChangeWatcher, remoteWatcher : IChangeWatcher) as x = 
@@ -13,16 +17,12 @@ type RepositoryFolder(folder : ManagedFolderInfo, localWatcher : IChangeWatcher,
     let remoteWatcher = remoteWatcher
     let mutable isStarted = false
     
-    let doTask syncState (getTask:unit->System.Threading.Tasks.Task<_>) = 
-        async {
+    let doTask syncState getTask = 
+        asyncTrace() {
             try
                 try
                     syncStateChanged.Trigger syncState
-                    let t = getTask()
-                    // Start if not done already
-                    if t.Status = System.Threading.Tasks.TaskStatus.Created then t.Start()
-                    do! t |> Async.AwaitTask
-                    if t.Exception <> null then syncError.Trigger t.Exception
+                    do! getTask()
                 finally
                     syncStateChanged.Trigger SyncState.Idle
             with exn -> syncError.Trigger exn
@@ -32,7 +32,7 @@ type RepositoryFolder(folder : ManagedFolderInfo, localWatcher : IChangeWatcher,
     let processor = 
         MailboxProcessor<_>.Start(fun inbox -> 
             let handleMsg msg = 
-                async {
+                asyncTrace() {
                 do!
                     match msg with
                     | DoSyncUp -> 
@@ -40,30 +40,39 @@ type RepositoryFolder(folder : ManagedFolderInfo, localWatcher : IChangeWatcher,
                     | DoSyncDown ->
                         doTask SyncState.SyncDown (fun () -> x.StartSyncDown())
                 }
-            let rec loop () =
+            let rec loop i =
                 async {
-                    // Get All messages
-                    let! allmsgs = 
-                        seq {
-                            for i in 1 .. inbox.CurrentQueueLength do
-                                yield inbox.Receive()
-                        }
-                        |> Async.Parallel
-                    if (isStarted) then
-                        // Make sure SyncDowns are prefered over SyncUp
-                        // And also make sure we do not spam our queue
-                        for msg in
-                            allmsgs |> Set.ofSeq  |> Seq.sort |> Seq.toList |> List.rev do
-                            do!
-                                match msg with
-                                | DoSyncUp -> 
-                                    doTask SyncState.SyncUp (fun () -> x.StartSyncUp())
-                                | DoSyncDown ->
-                                    doTask SyncState.SyncDown (fun () -> x.StartSyncDown())
-                                       
-                    return! loop()
+                    try
+                        // Get All messages (or wait for the first if non available)
+                        let! allmsgs = 
+                            if (inbox.CurrentQueueLength = 0) then
+                                seq { yield inbox.Receive() }
+                            else
+                                seq {
+                                    for i in 1 .. inbox.CurrentQueueLength do
+                                        yield inbox.Receive()
+                                }
+                            |> Async.Parallel
+                        if (isStarted) then
+                            // Make sure SyncDowns are prefered over SyncUp
+                            // And also make sure we do not spam our queue
+                            for msg in
+                                allmsgs |> Set.ofSeq  |> Seq.sort |> Seq.toList |> List.rev do
+                                let work =
+                                    match msg with
+                                    | DoSyncUp -> 
+                                        doTask SyncState.SyncUp (fun () -> x.StartSyncUp())
+                                    | DoSyncDown ->
+                                        doTask SyncState.SyncDown (fun () -> x.StartSyncDown())
+                                work.SetInfo (new DefaultStateTracer(sprintf "%s(%d): " (match msg with DoSyncUp -> "SyncUp" | DoSyncDown -> "SyncDown") i) :> ITracer)
+                                do! work |> convertToAsync 
+                    with 
+                        | exn -> 
+                            printfn "Error on round %d" i
+                            syncError.Trigger exn
+                    return! loop (i+1)
                 }
-            loop () 
+            loop 0 
             )
     // Starts watching the given Changewatcher (uses the given processor-message)
     let startWatching (watcher:IChangeWatcher) message = 
@@ -84,10 +93,10 @@ type RepositoryFolder(folder : ManagedFolderInfo, localWatcher : IChangeWatcher,
         processor.Post(DoSyncDown)
 
     /// Does a complete sync to the server (Should fail when there are conflicting changes)
-    abstract StartSyncUp : unit -> System.Threading.Tasks.Task<unit>
+    abstract StartSyncUp : unit -> AsyncTrace<ITracer, unit>
 
     /// Does a complete sync from the server with possible conflict resolution
-    abstract StartSyncDown : unit -> System.Threading.Tasks.Task<unit>
+    abstract StartSyncDown : unit -> AsyncTrace<ITracer, unit>
 
     /// Will be triggered when the Uploadprogress changes
     [<CLIEvent>]
@@ -127,18 +136,18 @@ type EmptyRepository(folder:ManagedFolderInfo) =
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()
 
-    let syncDown() = async {
+    let syncDown() = asyncTrace() {
             return ()
         }
-    let syncUp() = async {
+    let syncUp() =  asyncTrace() {
             return ()
         }
 
     override x.StartSyncDown () = 
-        syncDown() |> Async.StartAsTask
+        syncDown()
 
     override x.StartSyncUp() = 
-        syncUp() |> Async.StartAsTask
+        syncUp()
         
     [<CLIEvent>]
     override x.ProgressChanged = progressChanged.Publish

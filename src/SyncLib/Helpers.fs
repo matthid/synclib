@@ -11,6 +11,9 @@ module Seq =
                 i := !i + 1
                 yield e.Current
         }
+        
+type ITracer = 
+    abstract member log : Diagnostics.TraceEventType ->Printf.StringFormat<'a, unit> -> 'a
 
 /// Allows tracing of async workflows
 module AsyncTrace = 
@@ -44,7 +47,7 @@ module AsyncTrace =
                 for dataItem in dataItems do
                     let info = dataItem.Info
                     if (info.IsSome) then
-                        if (data.IsSome && obj.ReferenceEquals(data.Value, info.Value)) then 
+                        if (data.IsSome && not (obj.ReferenceEquals(data.Value, info.Value))) then 
                             failwith "multiple different data!"
                         data <- info
                 if (data.IsSome) then
@@ -119,7 +122,7 @@ module AsyncTrace =
             (item:> IAsyncTrace<'Info>).Capture internalList
             buildTrace (async.TryFinally(item.Async, f))
         
-        let tryWith (item: AsyncTrace<'Info,_>) (exnHandler:exn ->  AsyncTrace<'Info,_>) = 
+        let tryWith (item: AsyncTrace<'Info,_>) (exnHandler:exn -> AsyncTrace<'Info,_>) = 
             (item:> IAsyncTrace<'Info>).Capture internalList
             buildTrace (async.TryWith(item.Async, (fun xn -> (exnHandler xn).Async)))
         
@@ -187,21 +190,30 @@ module AsyncTrace =
             return d
         }
 
-module Logger = 
-    let logHelper ty (s : string) = Yaaf.Utils.Logging.Logger.WriteLine("{0}", ty, s)
-    let log ty fmt = Printf.kprintf (logHelper ty) fmt
-    let logVerb fmt = log System.Diagnostics.TraceEventType.Verbose fmt
-    let logWarn fmt = log System.Diagnostics.TraceEventType.Warning fmt
-    let logCrit fmt = log System.Diagnostics.TraceEventType.Critical fmt
-    let logErr fmt = log System.Diagnostics.TraceEventType.Error fmt
-    let logInfo fmt = log System.Diagnostics.TraceEventType.Information fmt     
+    let Ignore (traceAsy:AsyncTrace<_,_>) =
+        asyncTrace() {
+            let! item = traceAsy
+            return ()
+        }
+
+    type ITracer with
+        member x.logVerb fmt = x.log System.Diagnostics.TraceEventType.Verbose fmt
+        member x.logWarn fmt = x.log System.Diagnostics.TraceEventType.Warning fmt
+        member x.logCrit fmt = x.log System.Diagnostics.TraceEventType.Critical fmt
+        member x.logErr fmt =  x.log System.Diagnostics.TraceEventType.Error fmt
+        member x.logInfo fmt = x.log System.Diagnostics.TraceEventType.Information fmt     
+
+    type DefaultStateTracer(state:string) = 
+        let logHelper ty (s : string) = Yaaf.Utils.Logging.Logger.WriteLine("{0}: {1}", ty,state, s)
+        interface ITracer with 
+            member x.log ty fmt = Printf.kprintf (logHelper ty) fmt  
 
 module Event =
   let guard f (e:IEvent<'Del, 'Args>) = 
     let e = Event.map id e
     { new IEvent<'Args> with 
-        member x.AddHandler(d) = e.AddHandler(d)
-        member x.RemoveHandler(d) = e.RemoveHandler(d); f()
+        member x.AddHandler(d) = e.AddHandler(d); f()
+        member x.RemoveHandler(d) = e.RemoveHandler(d)
         member x.Subscribe(observer) = 
           let rm = e.Subscribe(observer) in f(); rm }
 

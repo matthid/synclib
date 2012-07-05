@@ -1,11 +1,12 @@
 ﻿namespace SyncLib
 
 open System.Diagnostics
-open SyncLib.Helpers.Logger
+open SyncLib.Helpers
+open SyncLib.Helpers.AsyncTrace
 
 /// Will be thrown if the process doesn't end with exitcode 0
-/// The Data concluded is a tuple of exitCode, output, errorOutput
-exception ToolProcessFailed of int * string * string
+/// The Data concluded is a tuple of exitCode, commandLine, output, errorOutput
+exception ToolProcessFailed of int * string * string * string
 
 type ToolProcess(processFile:string, workingDir:string, arguments:string) =
     let toolProcess = 
@@ -19,6 +20,8 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
                     WorkingDirectory = workingDir,
                     CreateNoWindow = true,
                     Arguments = arguments))
+    do 
+        toolProcess.EnableRaisingEvents <- false
 
     member x.Dispose disposing = 
         if (disposing) then
@@ -34,41 +37,54 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
 
 
     member x.RunAsync() = 
-        async {
+        asyncTrace() {
+            let! (t:ITracer) = AsyncTrace.traceInfo()
+
             // subscribe Exit event
-            toolProcess.EnableRaisingEvents <- true
             
-            let exitEvent = 
-                toolProcess.Exited 
-                    |> Async.AwaitEvent
+            
+            
             
             // Collect error stream
-            let errorBuilder = new System.Text.StringBuilder()
+            let errorBuilder = ref (new System.Text.StringBuilder())
             toolProcess.ErrorDataReceived 
                 |> Event.add (fun data ->
-                    logVerb "Received Error Line: %s\n" (if data.Data = null then "{NULL}" else data.Data)
-                    if data.Data <> null then errorBuilder.AppendLine(data.Data) |> ignore)
+                    if (data.Data = null) then
+                        t.logVerb "Received Error Line: {NULL}\n"
+                    else
+                        t.logVerb "Received Error Line: %s\n" data.Data
+                        (!errorBuilder).AppendLine(data.Data) |> ignore)
             
-            let outputBuilder = new System.Text.StringBuilder()
+            let outputBuilder = ref (new System.Text.StringBuilder())
             toolProcess.OutputDataReceived 
                 |> Event.add (fun data ->
-                    logVerb "Received Data Line: %s\n" (if data.Data = null then "{NULL}" else data.Data)
-                    if data.Data <> null then outputBuilder.AppendLine(data.Data) |> ignore)
+                    if (data.Data = null) then
+                        t.logVerb "Received Data Line: {NULL}\n"
+                    else
+                        t.logVerb "Received Data Line: %s\n" data.Data
+                        (!outputBuilder).AppendLine(data.Data) |> ignore)
 
-            let start = toolProcess.Start()
+            toolProcess.Start() |> ignore
             toolProcess.BeginErrorReadLine()
             toolProcess.BeginOutputReadLine()
-
+            
             // Wait for the process to finish
-            let! exit = exitEvent
-            toolProcess.WaitForExit()
+            let! exitEvent = 
+                toolProcess.Exited 
+                    |> Event.guard 
+                        (fun () ->
+                            toolProcess.EnableRaisingEvents <- true)
+                    |> Async.AwaitEvent
+                    |> AsyncTrace.convertFromAsync
+                    
             toolProcess.CancelErrorRead()
             toolProcess.CancelOutputRead()
 
 
             // Check exitcode
             let exitCode = toolProcess.ExitCode
-            if exitCode <> 0 then raise (ToolProcessFailed (exitCode, outputBuilder.ToString(), errorBuilder.ToString()))
+            if exitCode <> 0 then 
+                raise (ToolProcessFailed (exitCode, sprintf "%s/%s %s" workingDir processFile arguments,  (!outputBuilder).ToString(), (!errorBuilder).ToString()))
         }
             
     member x.StandardInput
@@ -77,7 +93,7 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
             
 
     member x.RunWithOutputAsync(lineReceived) = 
-        async {
+        asyncTrace() {
             
             let c = new System.Collections.Generic.List<_>()
             toolProcess.OutputDataReceived 
@@ -92,7 +108,7 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
         }
 
     member x.RunWithErrorOutputAsync(lineReceived, errorReceived) = 
-        async {
+        asyncTrace() {
             let c = new System.Collections.Generic.List<_>()
             toolProcess.ErrorDataReceived 
                 |> Event.add (fun data ->
