@@ -2,6 +2,5 @@
 // Es kann zur Erkundung und zum Testen des Bibliotheksprojekts verwendet werden.
 // Skriptdateien gehören nicht zum Projektbuild.
 
-#load "Module1.fs"
-open Module1
+#load "SvnProcess.fs"
 

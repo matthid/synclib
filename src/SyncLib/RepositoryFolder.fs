@@ -92,6 +92,9 @@ type RepositoryFolder(folder : ManagedFolderInfo, localWatcher : IChangeWatcher,
     member x.RequestSyncDown () = 
         processor.Post(DoSyncDown)
 
+    /// Reports an error (this should be protected, but this is not available in F#)
+    member x.ReportError exn = syncError.Trigger exn
+
     /// Does a complete sync to the server (Should fail when there are conflicting changes)
     abstract StartSyncUp : unit -> AsyncTrace<ITracer, unit>
 
@@ -131,8 +134,8 @@ type RepositoryFolder(folder : ManagedFolderInfo, localWatcher : IChangeWatcher,
         member x.SyncStateChanged = syncStateChanged.Publish
 
 /// This is a example implementation you can instantly start with
-type EmptyRepository(folder:ManagedFolderInfo) =  
-    inherit RepositoryFolder(folder, new LocalChangeWatcher(folder), new RemoteChangeWatcher(folder))
+type EmptyRepository(folder:ManagedFolderInfo) as x =  
+    inherit RepositoryFolder(folder, new SimpleLocalChangeWatcher(folder.FullPath, (fun err -> x.ReportError err)), new RemoteChangeWatcher(folder))
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()
 

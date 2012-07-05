@@ -58,7 +58,7 @@ module AsyncTrace =
         member x.SetInfo value = info <- Some value
     
 
-    type AsyncTraceBuilder<'Info, 'T>() as x = 
+    type AsyncTraceBuilder<'Info, 'T>() = 
         let internalList = new TraceList<'Info>()
 
         let buildTrace async = 
@@ -207,13 +207,34 @@ module AsyncTrace =
             member x.log ty fmt = Printf.kprintf (logHelper ty) fmt  
 
 module Event =
-  let guard f (e:IEvent<'Del, 'Args>) = 
-    let e = Event.map id e
-    { new IEvent<'Args> with 
-        member x.AddHandler(d) = e.AddHandler(d); f()
-        member x.RemoveHandler(d) = e.RemoveHandler(d)
-        member x.Subscribe(observer) = 
-          let rm = e.Subscribe(observer) in f(); rm }
+    let guard f (e:IEvent<'Del, 'Args>) = 
+        let e = Event.map id e
+        { new IEvent<'Args> with 
+            member x.AddHandler(d) = e.AddHandler(d); f()
+            member x.RemoveHandler(d) = e.RemoveHandler(d)
+            member x.Subscribe(observer) = 
+              let rm = e.Subscribe(observer) in f(); rm }
+    let snd (a,b,c) = b
+
+    let reduceTime span event = 
+        let newEvent = new Event<_>()
+        let lastEvent = ref System.DateTime.MinValue
+        event
+            |> Event.map (fun args -> System.DateTime.Now, args)
+            |> Event.add 
+                (fun (whenDate, args) ->
+                    // set a timer for the next event -> IE trigger, when nothing happens in span time
+                    if (whenDate - !lastEvent > span) then
+                        async {
+                            do! Async.Sleep(span.Milliseconds)
+                            if (whenDate - !lastEvent > span) then
+                                newEvent.Trigger args
+                        } |> Async.Start
+                    // Reset timer if running
+                    lastEvent := whenDate
+                    )
+
+        newEvent.Publish
 
 module Observable =
   let guard f (e:IObservable<'Args>) = 

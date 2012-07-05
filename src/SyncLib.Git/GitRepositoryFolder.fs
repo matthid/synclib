@@ -6,7 +6,7 @@ open SyncLib.Helpers.AsyncTrace
 open SyncLib.Git
 
 type GitRepositoryFolder(folder:ManagedFolderInfo) as x =  
-    inherit RepositoryFolder(folder, new LocalChangeWatcher(folder), new RemoteChangeWatcher(folder))
+    inherit RepositoryFolder(folder, new SimpleLocalChangeWatcher(folder.FullPath, (fun err -> x.ReportError err)), new RemoteChangeWatcher(folder))
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()
     let remoteName = "synclib"
