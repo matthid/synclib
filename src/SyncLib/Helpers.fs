@@ -60,12 +60,10 @@ module AsyncTrace =
 
     type AsyncTraceBuilder<'Info, 'T>() as x = 
         let internalList = new TraceList<'Info>()
-        let builded = new TraceList<'Info>()
 
         let buildTrace async = 
             let b = new AsyncTrace<'Info, 'Y>(None, async)
             (b :> IAsyncTrace<'Info>).Capture internalList
-            builded.Add(b)
             b
             
 
