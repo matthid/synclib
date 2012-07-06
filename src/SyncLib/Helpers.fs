@@ -214,8 +214,9 @@ module Event =
             member x.RemoveHandler(d) = e.RemoveHandler(d)
             member x.Subscribe(observer) = 
               let rm = e.Subscribe(observer) in f(); rm }
-    let snd (a,b,c) = b
-
+    
+    /// This esures that every x minutes there is only 1 Event at maximum
+    /// (lots of events will be reduced to 1 ... and this 1 will be fired when there was no event for x min)
     let reduceTime (span:System.TimeSpan) event = 
         let newEvent = new Event<_>()
         let eventId = ref 0
