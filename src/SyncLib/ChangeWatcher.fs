@@ -38,6 +38,8 @@ type IntelligentLocalWatcher(folder:string, onError) =
     let simpleWatcher = new SimpleLocalChangeWatcher(folder, onError)
     let t =
         simpleWatcher.Changed
+            // This esures that every 2 minutes there is only 1 Event at maximum
+            // (lots of events will be reduced to 1 ... and this 1 will be fired when there was no event for 1 min)
             |> Event.reduceTime (System.TimeSpan.FromMinutes(1.0))
             |> Event.add (fun args -> changedEvent.Trigger args) 
  
