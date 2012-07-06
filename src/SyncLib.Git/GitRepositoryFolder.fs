@@ -6,7 +6,7 @@ open SyncLib.Helpers.AsyncTrace
 open SyncLib.Git
 
 type GitRepositoryFolder(folder:ManagedFolderInfo) as x =  
-    inherit RepositoryFolder(folder, new SimpleLocalChangeWatcher(folder.FullPath, (fun err -> x.ReportError err)), new RemoteChangeWatcher(folder))
+    inherit RepositoryFolder(folder, new IntelligentLocalWatcher(folder.FullPath, (fun err -> x.ReportError err)), new RemoteChangeWatcher(folder))
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()
     let remoteName = "synclib"
@@ -109,18 +109,18 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
             with
             | ToolProcessFailed(code, cmd, output, error) 
                 when error.Contains "fatal: Not a git repository (or any of the parent directories): .git" ->
-                t.logInfo "%s is no Repro so init one" folder.Name
+                t.logWarn "%s is no Repro so init one" folder.Name
                 do! GitProcess.RunGitInitAsync(folder.FullPath)
 
-            // Check whether the "sparkle" remote point exists
+            // Check whether the "synclib" remote point exists
             let! remotes = GitProcess.RunGitRemoteAsync(folder.FullPath, ListVerbose)
             let syncRemotes = 
                 remotes 
                     |> Seq.filter (fun t -> t.Name = remoteName)
                     |> Seq.toArray
-            if (remotes.Count < 2 || syncRemotes |> Seq.exists (fun t -> t.Url <> folder.Remote)) then
-                if (remotes.Count > 0) then
-                    t.logInfo "%s has invalid %s remote entry - removing" folder.Name remoteName
+            if (syncRemotes.Length < 2 || syncRemotes |> Seq.exists (fun t -> t.Url <> folder.Remote)) then
+                if (syncRemotes.Length > 0) then
+                    t.logWarn "%s has invalid %s remote entry - removing" folder.Name remoteName
                     do! GitProcess.RunGitRemoteAsync(folder.FullPath, Remove(remoteName)) |> AsyncTrace.Ignore
                 
                 t.logInfo "adding %s remote entry to %s" remoteName folder.Name
@@ -143,7 +143,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                 // Fetch changes
                 do! GitProcess.RunGitFetchAsync(
                         folder.FullPath, 
-                        folder.Remote, 
+                        remoteName, 
                         "master", 
                         (fun newProgress -> progressChanged.Trigger (newProgress * 0.95)))
                     |> AsyncTrace.Ignore
@@ -177,7 +177,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                 do! commitAllChanges()
                 do! GitProcess.RunGitPushAsync(
                         folder.FullPath, 
-                        folder.Remote, 
+                        remoteName, 
                         "master",
                         (fun newProgress -> progressChanged.Trigger newProgress))
                         

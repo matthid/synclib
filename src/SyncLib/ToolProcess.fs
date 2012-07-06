@@ -40,28 +40,17 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
         asyncTrace() {
             let! (t:ITracer) = AsyncTrace.traceInfo()
 
-            // subscribe Exit event
-            
-            
-            
-            
             // Collect error stream
             let errorBuilder = ref (new System.Text.StringBuilder())
             toolProcess.ErrorDataReceived 
                 |> Event.add (fun data ->
-                    if (data.Data = null) then
-                        t.logVerb "Received Error Line: {NULL}\n"
-                    else
-                        t.logVerb "Received Error Line: %s\n" data.Data
+                    if (data.Data <> null) then
                         (!errorBuilder).AppendLine(data.Data) |> ignore)
             
             let outputBuilder = ref (new System.Text.StringBuilder())
             toolProcess.OutputDataReceived 
                 |> Event.add (fun data ->
-                    if (data.Data = null) then
-                        t.logVerb "Received Data Line: {NULL}\n"
-                    else
-                        t.logVerb "Received Data Line: %s\n" data.Data
+                    if (data.Data <> null) then
                         (!outputBuilder).AppendLine(data.Data) |> ignore)
 
             toolProcess.Start() |> ignore
@@ -77,14 +66,20 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
                     |> Async.AwaitEvent
                     |> AsyncTrace.convertFromAsync
                     
-            toolProcess.CancelErrorRead()
-            toolProcess.CancelOutputRead()
+            toolProcess.WaitForExit()
+            let exitCode = toolProcess.ExitCode
 
+            // Should run only 1 time
+            toolProcess.Close()
+            toolProcess.Dispose()
 
             // Check exitcode
-            let exitCode = toolProcess.ExitCode
             if exitCode <> 0 then 
-                raise (ToolProcessFailed (exitCode, sprintf "%s/%s %s" workingDir processFile arguments,  (!outputBuilder).ToString(), (!errorBuilder).ToString()))
+                let failedCmd = sprintf "%s> \"%s\" %s" workingDir processFile arguments
+                let output = (!outputBuilder).ToString()
+                let error = (!errorBuilder).ToString()
+                t.logErr "ToolProcess failed!\n\tCommand Line (exited with %d): %s\n\tOutput: %s\n\tError: %s" exitCode failedCmd output error
+                raise (ToolProcessFailed (exitCode, failedCmd, output, error))
         }
             
     member x.StandardInput

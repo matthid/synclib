@@ -12,12 +12,11 @@ open SyncLib.Helpers
 open System.Diagnostics
 
 // Test for ChangeWatcher
-
-
 let createWatcher folder = 
     let watcher = new IntelligentLocalWatcher(folder, (fun err -> printfn "Error: %s" (err.ToString())))
     watcher.Changed
         |> Event.add (fun a -> printfn "triggered")
+    watcher
 
 let reduceTime span = 
     let event = new Event<unit>()
