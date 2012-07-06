@@ -47,7 +47,7 @@ So if somebody has some insight on this just go ahaid and send a path.
 ### Why so "complicated"?
 
 I do not consider these above steps as a complication of the contribution process. 
-That's what to get for living in a state of law.
+That's what you get for living in a state of law.
 I really think free software licenses are the way to go. But the GPL is very restrictive in some terms. Consider these things:
 
 - GPL is only recommend when there is no proprietary äquivalent. This can change in the future and with a pure GPL licensing you can not change.
