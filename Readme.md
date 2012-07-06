@@ -65,4 +65,4 @@ This project is subject to the terms and conditions defined in file 'LICENSE.txt
 License.txt is a GPL License in version 3.
 
 If you require another licensing please write to matthi.d@googlemail.com. (I will always consider helping open source projects).
-Also remember you massively contribute to the project I have the option to give you any license you may require.
+Also remember: If you massively contribute to the project I have the option to give you any license you may require.
