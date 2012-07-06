@@ -9,9 +9,9 @@ C# (CSharp), F# (FSharp), VB.NET, C++/CLI, Windows Powershell (Could be quite us
 
 - https://github.com/forki/FAKE (binaries included, but not jet properly used)
 - https://github.com/fsharp/fsharp FSharp libraries required to use SyncLib and fsc required to build the Project
-- CLI Runtime
-* Mono > 2.10.8 
-* .NET 4
+- CLI Runtime (one of those)
+  * https://github.com/mono/mono Mono > 2.10.8 
+  * http://www.microsoft.com/de-de/download/details.aspx?id=17718 .NET 4
 
 
 ## Using
@@ -55,8 +55,8 @@ I really think free software licenses are the way to go. But the GPL is very res
 - I started this project with a lot of effort put into it. Even when the project evolves I would like to have the possibility to use it in other software projects.
 
 - You do not have to be afraid of changing the License of your contribution at will, and you can use your contribution wherever you want (see ContributorAgreement.md). 
-* "Any contribution we make available under any license will also be made available under a Free Culture (as defined by http://freedomdefined.org)  or Free Software/Open Source licence (as defined and approved by the Free Software Foundation or the Open Source Initiative)"
-* "Except as set out above, you keep all right, title, and interest in your contribution."
+  * "Any contribution we make available under any license will also be made available under a Free Culture (as defined by http://freedomdefined.org)  or Free Software/Open Source licence (as defined and approved by the Free Software Foundation or the Open Source Initiative)"
+  * "Except as set out above, you keep all right, title, and interest in your contribution."
 
 
 ## Licensing
