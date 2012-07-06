@@ -1,11 +1,15 @@
-﻿// Weitere Informationen zu F# unter "http://fsharp.net".
+﻿// ----------------------------------------------------------------------------
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE.txt', which is part of this source code package.
+// ----------------------------------------------------------------------------
 
+open Yaaf.SyncLib
+open Yaaf.SyncLib.Git
 
-open SyncLib
-open SyncLib.Git
-
-let backendManager = new GitBackendManager()
-    
+// Creating a backendmanager (required once per backend)
+let backendManager = new GitBackendManager() :> IBackendManager
+   
+// Create a manager for a specific folder
 let manager =
     backendManager.CreateFolderManager(
         new ManagedFolderInfo(
@@ -15,6 +19,8 @@ let manager =
             "git",
             "",
             new System.Collections.Generic.Dictionary<_,_>()))
+
+// Listen to the events
 manager.ProgressChanged
     |> Event.add (fun p -> printfn "New Progress %s" (p.ToString()))
 
@@ -35,11 +41,15 @@ manager.SyncStateChanged
     |> Event.add
         (fun changed -> printfn "State changed: %s" (changed.ToString()))
 
+// Start the service
 manager.StartService()
 printfn ">> Started, any key to exit the service"
 System.Console.ReadLine() |> ignore
 
+// Stop the service to no listen to the folder any longer (any running operations will be finished)
 manager.StopService()
 
 printfn ">> Stopped, any key to exit the program"
+
+// You could start the service again if you want
 System.Console.ReadLine() |> ignore

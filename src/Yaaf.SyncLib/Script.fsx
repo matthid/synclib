@@ -1,14 +1,15 @@
-﻿// Diese Datei ist ein Skript, das mit F# interaktiv ausgeführt werden kann.  
-// Es kann zur Erkundung und zum Testen des Bibliotheksprojekts verwendet werden.
-// Skriptdateien gehören nicht zum Projektbuild.
+﻿// ----------------------------------------------------------------------------
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE.txt', which is part of this source code package.
+// ----------------------------------------------------------------------------
 
 
 #I @"bin\Debug"
-#r "SyncLib.dll"
+#r "Yaaf.SyncLib.dll"
 
-open SyncLib
-open SyncLib.Helpers.AsyncTrace
-open SyncLib.Helpers
+open Yaaf.SyncLib
+open Yaaf.SyncLib.Helpers.AsyncTrace
+open Yaaf.SyncLib.Helpers
 open System.Diagnostics
 
 // Test for ChangeWatcher

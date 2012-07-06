@@ -1,13 +1,13 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 11.00
 # Visual Studio 2010
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "SyncLib", "SyncLib\SyncLib.fsproj", "{0096AAE6-3902-473D-B419-F6F9931D3B86}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Yaaf.SyncLib", "Yaaf.SyncLib\Yaaf.SyncLib.fsproj", "{0096AAE6-3902-473D-B419-F6F9931D3B86}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "SyncLib.Git", "SyncLib.Git\SyncLib.Git.fsproj", "{C75A3D77-43CD-419E-96B4-F308B05DE1B5}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Yaaf.SyncLib.Git", "Yaaf.SyncLib.Git\Yaaf.SyncLib.Git.fsproj", "{C75A3D77-43CD-419E-96B4-F308B05DE1B5}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "ConsoleSync", "ConsoleSync\ConsoleSync.fsproj", "{1A44D5F0-890A-4EE0-B9DB-7E5A6D4774AF}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Yaaf.ConsoleSync", "Yaaf.ConsoleSync\Yaaf.ConsoleSync.fsproj", "{1A44D5F0-890A-4EE0-B9DB-7E5A6D4774AF}"
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "SyncLib.Svn", "SyncLib.Svn\SyncLib.Svn.fsproj", "{F7DBF542-B3F1-4163-AC29-BF16C6633211}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "Yaaf.SyncLib.Svn", "Yaaf.SyncLib.Svn\Yaaf.SyncLib.Svn.fsproj", "{F7DBF542-B3F1-4163-AC29-BF16C6633211}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

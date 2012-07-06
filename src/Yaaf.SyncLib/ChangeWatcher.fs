@@ -1,8 +1,14 @@
-﻿namespace SyncLib
+﻿// ----------------------------------------------------------------------------
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE.txt', which is part of this source code package.
+// ----------------------------------------------------------------------------
+namespace Yaaf.SyncLib
 
-open SyncLib.Helpers
+open Yaaf.SyncLib.Helpers
 
+/// A interface for notifications on changes.
 type IChangeWatcher = 
+    /// The Changed event will be triggered when a change occured.
     [<CLIEvent>]
     abstract member Changed : IEvent<unit>
 

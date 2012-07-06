@@ -8,9 +8,10 @@
     <ProjectGuid>{f7dbf542-b3f1-4163-ac29-bf16c6633211}</ProjectGuid>
     <OutputType>Library</OutputType>
     <RootNamespace>SyncLib.Svn</RootNamespace>
-    <AssemblyName>SyncLib.Svn</AssemblyName>
+    <AssemblyName>Yaaf.SyncLib.Svn</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
-    <Name>SyncLib.Svn</Name>
+    <Name>Yaaf.SyncLib.Svn</Name>
+    <TargetFrameworkProfile>Mono_2.10</TargetFrameworkProfile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>

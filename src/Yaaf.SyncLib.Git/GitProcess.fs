@@ -1,12 +1,14 @@
-﻿// Weitere Informationen zu F# unter "http://fsharp.net".
-
-namespace SyncLib.Git
+﻿// ----------------------------------------------------------------------------
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE.txt', which is part of this source code package.
+// ----------------------------------------------------------------------------
+namespace Yaaf.SyncLib.Git
 
 open System.Diagnostics
 open System.IO
-open SyncLib
-open SyncLib.Helpers
-open SyncLib.Helpers.AsyncTrace
+open Yaaf.SyncLib
+open Yaaf.SyncLib.Helpers
+open Yaaf.SyncLib.Helpers.AsyncTrace
 
 type BranchType = 
     | Local

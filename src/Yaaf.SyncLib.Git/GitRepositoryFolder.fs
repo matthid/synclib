@@ -1,9 +1,13 @@
-﻿namespace SyncLib.Git
+﻿// ----------------------------------------------------------------------------
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE.txt', which is part of this source code package.
+// ----------------------------------------------------------------------------
+namespace Yaaf.SyncLib.Git
 
-open SyncLib
-open SyncLib.Helpers
-open SyncLib.Helpers.AsyncTrace
-open SyncLib.Git
+open Yaaf.SyncLib
+open Yaaf.SyncLib.Helpers
+open Yaaf.SyncLib.Helpers.AsyncTrace
+open Yaaf.SyncLib.Git
 
 type GitRepositoryFolder(folder:ManagedFolderInfo) as x =  
     inherit RepositoryFolder(folder, new IntelligentLocalWatcher(folder.FullPath, (fun err -> x.ReportError err)), new RemoteChangeWatcher(folder))

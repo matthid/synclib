@@ -8,9 +8,10 @@
     <ProjectGuid>{c75a3d77-43cd-419e-96b4-f308b05de1b5}</ProjectGuid>
     <OutputType>Library</OutputType>
     <RootNamespace>SparkleLib.Git.FSparp</RootNamespace>
-    <AssemblyName>SyncLib.Git</AssemblyName>
+    <AssemblyName>Yaaf.SyncLib.Git</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
-    <Name>SyncLib.Git.FSharp</Name>
+    <Name>Yaaf.SyncLib.Git</Name>
+    <TargetFrameworkProfile>Mono_2.10</TargetFrameworkProfile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -49,8 +50,8 @@
     <None Include="Script.fsx" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\SyncLib\SyncLib.fsproj">
-      <Name>SyncLib</Name>
+    <ProjectReference Include="..\Yaaf.SyncLib\Yaaf.SyncLib.fsproj">
+      <Name>Yaaf.SyncLib</Name>
       <Project>{0096aae6-3902-473d-b419-f6f9931d3b86}</Project>
       <Private>True</Private>
     </ProjectReference>

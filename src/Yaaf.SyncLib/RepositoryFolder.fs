@@ -1,13 +1,18 @@
-﻿namespace SyncLib
+﻿// ----------------------------------------------------------------------------
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE.txt', which is part of this source code package.
+// ----------------------------------------------------------------------------
+namespace Yaaf.SyncLib
 
-open SyncLib.Helpers.AsyncTrace
-open SyncLib.Helpers
+open Yaaf.SyncLib.Helpers.AsyncTrace
+open Yaaf.SyncLib.Helpers
 
+/// Action the RepositoryFolder-Processor should execute
 type ProcessorMessage = 
     | DoSyncUp
     | DoSyncDown
 
-
+/// A IManagedFolder implementation for repositories (git, svn ...)
 [<AbstractClass>]
 type RepositoryFolder(folder : ManagedFolderInfo, localWatcher : IChangeWatcher, remoteWatcher : IChangeWatcher) as x = 
     let syncConflict = new Event<SyncConflict>()

@@ -1,6 +1,16 @@
-﻿namespace SyncLib.Helpers
+﻿// ----------------------------------------------------------------------------
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE.txt', which is part of this source code package.
+// ----------------------------------------------------------------------------
+namespace Yaaf.SyncLib.Helpers
 
 open System
+open System.Collections
+open System.Collections.Generic
+open System.Diagnostics
+open System.Linq
+open System.Reflection
+open System.Threading
 
 module Seq =
     let tryTake (n : int) (s : _ seq) =
@@ -200,9 +210,20 @@ module AsyncTrace =
         member x.logCrit fmt = x.log System.Diagnostics.TraceEventType.Critical fmt
         member x.logErr fmt =  x.log System.Diagnostics.TraceEventType.Error fmt
         member x.logInfo fmt = x.log System.Diagnostics.TraceEventType.Information fmt     
-
+    let globalTrace = new TraceSource("global")
+    /// Will just print it to the "global" trace
     type DefaultStateTracer(state:string) = 
-        let logHelper ty (s : string) = Yaaf.Utils.Logging.Logger.WriteLine("{0}: {1}", ty,state, s)
+        let activity = Guid.NewGuid()
+        // TODO: Do something more sophisticated here like getting the calling assembly
+        let logHelper ty (s : string) =  
+            let oldId = Trace.CorrelationManager.ActivityId;
+            try
+                if (oldId <> activity) then Trace.CorrelationManager.ActivityId <- activity
+                
+                globalTrace.TraceEvent(ty, 0, s);
+                globalTrace.Flush();
+            finally 
+                Trace.CorrelationManager.ActivityId <- oldId
         interface ITracer with 
             member x.log ty fmt = Printf.kprintf (logHelper ty) fmt  
 

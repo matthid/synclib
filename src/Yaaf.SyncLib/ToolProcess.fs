@@ -1,13 +1,18 @@
-﻿namespace SyncLib
+﻿// ----------------------------------------------------------------------------
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE.txt', which is part of this source code package.
+// ----------------------------------------------------------------------------
+namespace Yaaf.SyncLib
 
 open System.Diagnostics
-open SyncLib.Helpers
-open SyncLib.Helpers.AsyncTrace
+open Yaaf.SyncLib.Helpers
+open Yaaf.SyncLib.Helpers.AsyncTrace
 
-/// Will be thrown if the process doesn't end with exitcode 0
-/// The Data concluded is a tuple of exitCode, commandLine, output, errorOutput
+/// Will be thrown if the process doesn't end with exitcode 0.
+/// The Data contained is a tuple of exitCode, commandLine, output, errorOutput.
 exception ToolProcessFailed of int * string * string * string
 
+/// A simple wrapper for asyncronus process starting
 type ToolProcess(processFile:string, workingDir:string, arguments:string) =
     let toolProcess = 
         new Process(

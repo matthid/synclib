@@ -8,9 +8,10 @@
     <ProjectGuid>{0096aae6-3902-473d-b419-f6f9931d3b86}</ProjectGuid>
     <OutputType>Library</OutputType>
     <RootNamespace>SparkleLib.FSharp</RootNamespace>
-    <AssemblyName>SyncLib</AssemblyName>
+    <AssemblyName>Yaaf.SyncLib</AssemblyName>
     <TargetFrameworkVersion>v4.0</TargetFrameworkVersion>
-    <Name>SyncLib</Name>
+    <Name>Yaaf.SyncLib</Name>
+    <TargetFrameworkProfile>Mono_2.10</TargetFrameworkProfile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -31,16 +32,8 @@
     <WarningLevel>3</WarningLevel>
     <DocumentationFile>bin\Release\SparkleLib.FSharp.XML</DocumentationFile>
   </PropertyGroup>
-  <ItemGroup>
-    <Reference Include="mscorlib" />
-    <Reference Include="FSharp.Core" />
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Numerics" />
-    <Reference Include="Yaaf.Utils">
-      <HintPath>..\..\..\yaaf-utils\bin\Debug\Clr4\Yaaf.Utils.dll</HintPath>
-    </Reference>
-  </ItemGroup>
+  <Import Project="$(MSBuildExtensionsPath32)\FSharp\1.0\Microsoft.FSharp.Targets" Condition="!Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
+  <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft F#\v4.0\Microsoft.FSharp.Targets" Condition=" Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Helpers.fs" />
@@ -52,9 +45,26 @@
     <None Include="..\..\build.fsx">
       <Link>build.fsx</Link>
     </None>
+    <None Include="..\..\build.cmd">
+      <Link>build.cmd</Link>
+    </None>
+    <None Include="..\..\ContributorAgreement.md">
+      <Link>ContributorAgreement.md</Link>
+    </None>
+    <Content Include="..\..\License.txt">
+      <Link>License.txt</Link>
+    </Content>
+    <None Include="..\..\Readme.md">
+      <Link>Readme.md</Link>
+    </None>
   </ItemGroup>
-  <Import Project="$(MSBuildExtensionsPath32)\FSharp\1.0\Microsoft.FSharp.Targets" Condition="!Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
-  <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft F#\v4.0\Microsoft.FSharp.Targets" Condition=" Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
+  <ItemGroup>
+    <Reference Include="mscorlib" />
+    <Reference Include="FSharp.Core" />
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
+  </ItemGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
 	     Other similar extension points exist, see Microsoft.Common.targets.
 	<Target Name="BeforeBuild">

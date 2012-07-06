@@ -1,3 +1,8 @@
+REM ----------------------------------------------------------------------------
+REM This file is subject to the terms and conditions defined in
+REM file 'LICENSE.txt', which is part of this source code package.
+REM ----------------------------------------------------------------------------
+
 @echo off
 
 :Build

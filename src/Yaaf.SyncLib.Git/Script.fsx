@@ -1,17 +1,18 @@
-﻿// Diese Datei ist ein Skript, das mit F# interaktiv ausgeführt werden kann.  
-// Es kann zur Erkundung und zum Testen des Bibliotheksprojekts verwendet werden.
-// Skriptdateien gehören nicht zum Projektbuild.
-#I @"..\SyncLib\bin\Debug"
+﻿// ----------------------------------------------------------------------------
+// This file is subject to the terms and conditions defined in
+// file 'LICENSE.txt', which is part of this source code package.
+// ----------------------------------------------------------------------------
+#I @"..\Yaaf.SyncLib\bin\Debug"
 #I @"bin\Debug"
-#r "SyncLib.dll"
-#r "SyncLib.Git.dll"
+#r "Yaaf.SyncLib.dll"
+#r "Yaaf.SyncLib.Git.dll"
 //#load "Helpers.fs"
 //#load "GitProcess.fs"
 //#load "GitRepositoryFolder.fs"
 //#load "GitBackendManager.fs"
 
-open SyncLib
-open SyncLib.Git
+open Yaaf.SyncLib
+open Yaaf.SyncLib.Git
 
 let backendManager = new GitBackendManager()
     
