@@ -216,23 +216,24 @@ module Event =
               let rm = e.Subscribe(observer) in f(); rm }
     let snd (a,b,c) = b
 
-    let reduceTime span event = 
+    let reduceTime (span:System.TimeSpan) event = 
         let newEvent = new Event<_>()
-        let lastEvent = ref System.DateTime.MinValue
+        let eventId = ref 0
         event
-            |> Event.map (fun args -> System.DateTime.Now, args)
+            // Event.scan is not threadsafe
+            //|> Event.scan (fun state args -> (fst state) + 1, args) (0,Unchecked.defaultof<_>)
             |> Event.add 
-                (fun (whenDate, args) ->
-                    // set a timer for the next event -> IE trigger, when nothing happens in span time
-                    if (whenDate - !lastEvent > span) then
-                        async {
-                            do! Async.Sleep(span.Milliseconds)
-                            if (whenDate - !lastEvent > span) then
-                                newEvent.Trigger args
-                        } |> Async.Start
-                    // Reset timer if running
-                    lastEvent := whenDate
-                    )
+                (fun (args) ->
+                    // lock the two lines if you want to be thread safe 
+                    // (note: events are not thread safe in general!)
+                    let myId = !eventId + 1
+                    eventId := myId
+                
+                    async { 
+                        do! Async.Sleep(int (span.TotalMilliseconds))
+                        if (myId = !eventId) then 
+                            newEvent.Trigger args
+                    } |> Async.Start)
 
         newEvent.Publish
 
