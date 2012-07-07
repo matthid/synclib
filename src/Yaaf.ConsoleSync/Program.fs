@@ -35,8 +35,10 @@ manager.SyncError
         (fun error -> 
             match error with
             | SshException(message, log) ->
+                
                 printfn "%s" message
                 printfn ">> Stopped the service!"
+                printfn ">> open a console and execute \"%s\" and if you are asked type \"yes\"" "ssh.exe git@yourserver"
                 manager.StopService()
             | ToolProcessFailed(errorCode, cmd, output, errorOutput) -> printfn "Unknown Tool Error(%s): %d, %s, %s" cmd errorCode output errorOutput
             | _ -> printfn "Error: %s" (error.ToString()))

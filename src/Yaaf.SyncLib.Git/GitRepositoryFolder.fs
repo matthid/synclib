@@ -9,8 +9,15 @@ open Yaaf.SyncLib.Helpers
 open Yaaf.SyncLib.Helpers.AsyncTrace
 open Yaaf.SyncLib.Git
 
+open System.IO
+
+/// Syncronises a git folder
 type GitRepositoryFolder(folder:ManagedFolderInfo) as x =  
-    inherit RepositoryFolder(folder, new IntelligentLocalWatcher(folder.FullPath, (fun err -> x.ReportError err)), new RemoteChangeWatcher(folder))
+    inherit RepositoryFolder(folder)
+
+    let localWatcher = new SimpleLocalChangeWatcher(folder.FullPath, (fun err -> x.ReportError err))
+    let remoteWatcher = new RemoteChangeWatcher(folder)
+
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()
     let remoteName = "synclib"
@@ -18,6 +25,25 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
     let mutable isInit = false
     let git = folder.Additional.["gitpath"]
     let sshPath = folder.Additional.["sshpath"]
+    
+    // Starts watching the given Changewatcher (uses the given processor-message)
+    
+
+        
+    do 
+        // Start watching
+        localWatcher.Changed
+            // Filter git directory
+            |> Event.filter 
+                (fun (changeType, oldPath, newPath)-> 
+                    not (oldPath.StartsWith (Path.Combine(folder.FullPath, ".git"))))
+            // Reduce event
+            |> Event.reduceTime (System.TimeSpan.FromMinutes(1.0))
+            |> Event.add (fun args -> x.RequestSyncUp())
+
+        remoteWatcher.Changed 
+            |> Event.add 
+                (fun l -> x.RequestSyncDown())
 
     let toSshPath (remote:string) = 
         let remote = 

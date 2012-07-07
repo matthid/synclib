@@ -14,12 +14,10 @@ type ProcessorMessage =
 
 /// A IManagedFolder implementation for repositories (git, svn ...)
 [<AbstractClass>]
-type RepositoryFolder(folder : ManagedFolderInfo, localWatcher : IChangeWatcher, remoteWatcher : IChangeWatcher) as x = 
+type RepositoryFolder(folder : ManagedFolderInfo) as x = 
     let syncConflict = new Event<SyncConflict>()
     let syncError = new Event<System.Exception>()
     let syncStateChanged = new Event<SyncState>()
-    let localWatcher = localWatcher
-    let remoteWatcher = remoteWatcher
     let mutable isStarted = false
     
     let doTask syncState getTask = 
@@ -79,15 +77,6 @@ type RepositoryFolder(folder : ManagedFolderInfo, localWatcher : IChangeWatcher,
                 }
             loop 0 
             )
-    // Starts watching the given Changewatcher (uses the given processor-message)
-    let startWatching (watcher:IChangeWatcher) message = 
-        watcher.Changed 
-            |> Event.filter(fun l -> isStarted)
-            |> Event.add (fun l -> processor.Post(message))
-    do 
-        // Start watching
-        startWatching localWatcher DoSyncUp
-        startWatching remoteWatcher DoSyncDown
 
     /// Requests a UpSync Operation
     member x.RequestSyncUp () = 
@@ -140,7 +129,7 @@ type RepositoryFolder(folder : ManagedFolderInfo, localWatcher : IChangeWatcher,
 
 /// This is a example implementation you can instantly start with
 type EmptyRepository(folder:ManagedFolderInfo) as x =  
-    inherit RepositoryFolder(folder, new SimpleLocalChangeWatcher(folder.FullPath, (fun err -> x.ReportError err)), new RemoteChangeWatcher(folder))
+    inherit RepositoryFolder(folder)
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()
 
