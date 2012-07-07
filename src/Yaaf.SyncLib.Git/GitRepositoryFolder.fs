@@ -36,10 +36,12 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
             // Filter git directory
             |> Event.filter 
                 (fun (changeType, oldPath, newPath)-> 
-                    not (oldPath.StartsWith (Path.Combine(folder.FullPath, ".git"))))
+                    let gitPath = Path.Combine(folder.FullPath, ".git")
+                    not (oldPath.StartsWith gitPath) && not (newPath.StartsWith gitPath))
             // Reduce event
             |> Event.reduceTime (System.TimeSpan.FromMinutes(1.0))
-            |> Event.add (fun args -> x.RequestSyncUp())
+            |> Event.add (fun args -> 
+                x.RequestSyncUp())
 
         remoteWatcher.Changed 
             |> Event.add 
@@ -160,7 +162,9 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                 when error.Contains "fatal: Not a git repository (or any of the parent directories): .git" ->
                 t.logWarn "%s is no Repro so init one" folder.Name
                 do! GitProcess.RunGitInitAsync git (folder.FullPath)
-            
+                
+                    
+           
             // Check ssh connection
             do! SshProcess.ensureConnection sshPath folder.FullPath (toSshPath folder.Remote) false
 
@@ -181,6 +185,15 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
             isInit <- true
             return ()
         }
+
+    let (|Contains|_|) (contain:string) (data:string) =   
+        if (data.Contains(contain)) then Some(()) else None
+    
+    let repairMasterBranch () = 
+        File.WriteAllText(
+            Path.Combine(folder.FullPath, "Readme.synclib"), 
+            "This file was required for the first commit\n" +
+            "You can safely remove it any time" ) 
 
     /// The SyncDown Process
     let syncDown() =
@@ -208,13 +221,18 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                     do! GitProcess.RunGitRebaseAsync git folder.FullPath (Start("FETCH_HEAD", "master"))
                 with
                     | ToolProcessFailed(exitCode, cmd, o, e) ->
-                        let errorMsg = (sprintf "Cmd: %s, Code: %d, Output: %s, Error %s" cmd exitCode o e)
-                        t.logWarn "Conflict while Down-Merging of %s: %s" folder.Name errorMsg
-                        // Conflict
-                        syncConflict.Trigger (SyncConflict.Unknown errorMsg)
+                        match e with
+                        | Contains "fatal: no such branch: master" ->
+                            repairMasterBranch()
+                            x.RequestSyncDown()
+                        | _ ->
+                            let errorMsg = (sprintf "Cmd: %s, Code: %d, Output: %s, Error %s" cmd exitCode o e)
+                            t.logWarn "Conflict while Down-Merging of %s: %s" folder.Name errorMsg
+                            // Conflict
+                            syncConflict.Trigger (SyncConflict.Unknown errorMsg)
                     
-                        // Resolve conflict
-                        do! resoveConflicts()
+                            // Resolve conflict
+                            do! resoveConflicts()
             finally 
                 progressChanged.Trigger 1.0
         }
@@ -238,13 +256,19 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                 progressChanged.Trigger 1.0
             with 
                 | ToolProcessFailed(exitCode, cmd, o ,e) ->
-                    // Conflict
-                    let errorMsg = (sprintf "Cmd: %s, Code: %d, Output: %s, Error %s" cmd exitCode o e)
-                    t.logWarn "Conflict while Sync-Up of %s: %s" folder.Name errorMsg
+                    match e with
+                    | Contains "error: src refspec master does not match any" -> 
+                        // No Master Branch
+                        repairMasterBranch()
+                        x.RequestSyncUp()
+                    | _ ->
+                        // Conflict
+                        let errorMsg = (sprintf "Cmd: %s, Code: %d, Output: %s, Error %s" cmd exitCode o e)
+                        t.logWarn "Conflict while Sync-Up of %s: %s" folder.Name errorMsg
                     
-                    syncConflict.Trigger (SyncConflict.Unknown errorMsg)
-                    x.RequestSyncDown() // We handle conflicts there
-                    x.RequestSyncUp()
+                        syncConflict.Trigger (SyncConflict.Unknown errorMsg)
+                        x.RequestSyncDown() // We handle conflicts there
+                        x.RequestSyncUp()
             
             return ()
         }

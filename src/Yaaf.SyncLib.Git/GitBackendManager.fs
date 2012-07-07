@@ -42,6 +42,9 @@ type GitBackendManager() =
         checkKey folder.Additional "gitpath" locateGit
         checkKey folder.Additional "sshpath" locateSsh
 
+        if not <| System.IO.Directory.Exists(folder.FullPath) then
+            System.IO.Directory.CreateDirectory(folder.FullPath) |> ignore
+
         new GitRepositoryFolder(folder) :> IManagedFolder
     
     interface IBackendManager with
