@@ -113,28 +113,6 @@ module HandleGitArguments =
                 | CheckoutType.Branch(name) -> name)
                     
 
-    let possibleGitPaths = 
-        [ "/usr/bin/git";
-         "/usr/local/bin/git"; 
-         "/opt/local/bin/git"; 
-         "/usr/local/git/bin/git";
-         "C:\\Program Files (x86)\\Git\\bin\\git.exe";
-         "msysgit\\bin\\git.exe"; ]
-
-    let locateGit = 
-        let gitPath = ref null
-        fun () -> 
-                if (!gitPath = null) then 
-                    gitPath := 
-                        (match 
-                            possibleGitPaths
-                                |> List.tryFind (fun path -> File.Exists(path)) with
-                        | Option.Some(foundPath) -> foundPath
-                        | Option.None -> "git")
-
-                !gitPath
-
-
 type GitStatusType = 
     | Added    = 0
     | Modified = 1
@@ -222,8 +200,19 @@ module HandleGitData =
             cp, cp
 
 module GitProcess = 
-    let createGitProc (loc:string) (args:GitArguments) = 
-        new ToolProcess(HandleGitArguments.locateGit(), loc, HandleGitArguments.toCommandLine(args))
+    let createGitProc (gitPath:string) (workingDir:string) (args:GitArguments) = 
+        new ToolProcess(gitPath, workingDir, HandleGitArguments.toCommandLine(args))
+
+    let run git wDir status = asyncTrace() {
+        use gitProc = createGitProc git wDir status
+        // NOTE: it can happen that the git process gets stuck!
+        // This usually indicates that we got a "The remote end hang up unexpectedly"
+        // A possible fix would be to add a timeout option to the ToolProcess and 
+        // handle it on the git side with killing all child processes of git
+        // (or even better the whole process tree from the bottom up
+        // Also note that you have to do this also on the other Run methods 
+        // (which are currently not factored out into functions).
+        do! gitProc.RunAsync() }
 
     let runGitProgressCommand(gitProc:ToolProcess, onProcessChange) = 
         asyncTrace() {
@@ -247,9 +236,9 @@ module GitProcess =
                     Option.None
                 )
         }
-    let RunGitStatusAsync(location) = 
+    let RunGitStatusAsync git wDir = 
         asyncTrace() {
-            use gitProc = createGitProc location Status
+            use gitProc = createGitProc git wDir Status
             return!
                 gitProc.RunWithOutputAsync(fun l ->
                     if (System.String.IsNullOrEmpty(l)) then Option.None
@@ -264,14 +253,14 @@ module GitProcess =
                 )
         }
 
-    let RunGitStatus(location) = 
-        RunGitStatusAsync(location)
+    let RunGitStatus git wDir = 
+        RunGitStatusAsync git wDir
             |> convertToAsync
             |> Async.RunSynchronously
 
-    let RunGitLsRemoteAsync(location, uri, branch) = 
+    let RunGitLsRemoteAsync git wDir uri branch = 
         asyncTrace() {
-            use gitProc = createGitProc location (Ls_remote(uri, branch))
+            use gitProc = createGitProc git wDir (Ls_remote(uri, branch))
             let! output = gitProc.RunWithOutputAsync(fun l -> 
                 if (System.String.IsNullOrEmpty(l)) then Option.None
                 else Option.Some l
@@ -280,22 +269,22 @@ module GitProcess =
             return output.[0].Substring(0,40)
         }
 
-    let RunGitLsRemote(location, uri, branch) = 
-        RunGitLsRemoteAsync(location, uri, branch)
+    let RunGitLsRemote git wDir uri branch = 
+        RunGitLsRemoteAsync git wDir uri branch
             |> convertToAsync
             |> Async.RunSynchronously
       
 
-    let RunGitInitAsync(location) = 
+    let RunGitInitAsync git wDir = 
         asyncTrace() {
-            use gitProc = createGitProc location Init
+            use gitProc = createGitProc git wDir Init
             do! gitProc.RunAsync()
             return ()
         }
 
-    let RunGitBranchAsync(location, types) = 
+    let RunGitBranchAsync git wDir types = 
         asyncTrace() {
-            use gitProc = createGitProc location (Branch(types))
+            use gitProc = createGitProc  git wDir (Branch(types))
             return!
                 gitProc.RunWithOutputAsync(fun l ->
                     if (System.String.IsNullOrEmpty(l)) then Option.None
@@ -307,9 +296,9 @@ module GitProcess =
                 )
         }
 
-    let RunGitRemoteAsync(location, types) = 
+    let RunGitRemoteAsync git wDir types = 
         asyncTrace() {
-            use gitProc = createGitProc location (Remote(types))
+            use gitProc = createGitProc  git wDir (Remote(types))
             
             return!
                 gitProc.RunWithOutputAsync(fun l ->
@@ -332,37 +321,34 @@ module GitProcess =
                 )
         }
     
-    let RunGitFetchAsync(location, url, branch, onProcessChange) = 
+    let RunGitFetchAsync git wDir url branch onProcessChange = 
         asyncTrace() {
-            use gitProc = createGitProc location (GitArguments.Fetch(url, branch))
+            use gitProc = createGitProc  git wDir (GitArguments.Fetch(url, branch))
             do! runGitProgressCommand(gitProc, onProcessChange) |> AsyncTrace.Ignore
         }
 
-    let RunGitRebaseAsync(location, rebaseType) = 
+    let RunGitRebaseAsync git wDir rebaseType = 
         asyncTrace() {
-            use gitProc = createGitProc location (GitArguments.Rebase(rebaseType))
-            do! gitProc.RunAsync()
+            do! run  git wDir (GitArguments.Rebase(rebaseType))
         }
 
-    let RunGitAddAsync(location, addOption, files) = 
+    let RunGitAddAsync git wDir addOption files = 
         asyncTrace() {
-            use gitProc = createGitProc location (GitArguments.Add(addOption, files))
-            do! gitProc.RunAsync()
+            do! run  git wDir (GitArguments.Add(addOption, files))
         }
 
-    let RunGitCommitAsync(location, message) = 
+    let RunGitCommitAsync git wDir message = 
         asyncTrace() {
-            use gitProc = createGitProc location (GitArguments.Commit(message))
-            do! gitProc.RunAsync()
+            do! run  git wDir (GitArguments.Commit(message))
         }
 
-    let RunGitPushAsync(location, url, branch, onProcessChange) = 
+    let RunGitPushAsync git wDir url branch onProcessChange = 
         asyncTrace() {
-            use gitProc = createGitProc location (GitArguments.Push(url, branch))
+            use gitProc = createGitProc git wDir (GitArguments.Push(url, branch))
             do! runGitProgressCommand(gitProc, onProcessChange) |> AsyncTrace.Ignore
         }
-    let RunGitCheckoutAsync(location, checkoutType) = 
+    let RunGitCheckoutAsync git wDir checkoutType = 
         asyncTrace() {
-            use gitProc = createGitProc location (GitArguments.Checkout(checkoutType))
-            do! gitProc.RunAsync()
+            do! run git wDir (GitArguments.Checkout(checkoutType))
         }
+

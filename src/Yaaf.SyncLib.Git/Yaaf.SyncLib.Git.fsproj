@@ -44,6 +44,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="SshProcess.fs" />
     <Compile Include="GitProcess.fs" />
     <Compile Include="GitRepositoryFolder.fs" />
     <Compile Include="GitBackendManager.fs" />

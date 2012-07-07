@@ -21,6 +21,7 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
                     FileName = processFile,
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
+                    RedirectStandardInput = true,
                     UseShellExecute = false,
                     WorkingDirectory = workingDir,
                     CreateNoWindow = true,
@@ -40,7 +41,7 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
             x.Dispose(true)
             System.GC.SuppressFinalize(x)
 
-
+    member x.Kill() = toolProcess.Kill()
     member x.RunAsync() = 
         asyncTrace() {
             let! (t:ITracer) = AsyncTrace.traceInfo()
@@ -50,12 +51,14 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
             toolProcess.ErrorDataReceived 
                 |> Event.add (fun data ->
                     if (data.Data <> null) then
+                        t.logVerb "Received Error Line %s" data.Data
                         (!errorBuilder).AppendLine(data.Data) |> ignore)
             
             let outputBuilder = ref (new System.Text.StringBuilder())
             toolProcess.OutputDataReceived 
                 |> Event.add (fun data ->
                     if (data.Data <> null) then
+                        t.logVerb "Received Line %s" data.Data
                         (!outputBuilder).AppendLine(data.Data) |> ignore)
 
             toolProcess.Start() |> ignore
@@ -72,6 +75,7 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
                     |> AsyncTrace.convertFromAsync
                     
             toolProcess.WaitForExit()
+            
             let exitCode = toolProcess.ExitCode
 
             // Should run only 1 time

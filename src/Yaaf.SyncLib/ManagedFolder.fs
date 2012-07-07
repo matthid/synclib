@@ -8,6 +8,7 @@ open System.Threading.Tasks
 
 /// A simple info object to contain all the settings for a specific backend. Extensible over the IDictionary
 type ManagedFolderInfo(name:string, path:string, remote:string, backend:string, announcementUrl:string, dict:System.Collections.Generic.IDictionary<string,string>) = 
+    let dictCopy = new System.Collections.Generic.Dictionary<_,_>(dict) :> System.Collections.Generic.IDictionary<_,_>
     /// The name or key shown in the gui for the folder, has to be unique (possibly used by the backend)
     member x.Name = name
     /// The full path of the folder (used by the backend)
@@ -19,9 +20,7 @@ type ManagedFolderInfo(name:string, path:string, remote:string, backend:string, 
     /// A serverurl which can be listened to for changes (can be used by the backend)
     member x.AnnouncementUrl = announcementUrl
     /// Additional settings to be extensible (other backends could have other configurations requirements)
-    member x.Additional 
-        with get(key:string) = 
-            dict.[key]
+    member x.Additional = dictCopy
 
 /// The Type of Conflict that occured while syncing
 type SyncConflict = 

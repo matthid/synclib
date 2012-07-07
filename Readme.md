@@ -58,6 +58,7 @@ I really think free software licenses are the way to go. But the GPL is very res
   * "Any contribution we make available under any license will also be made available under a Free Culture (as defined by http://freedomdefined.org)  or Free Software/Open Source licence (as defined and approved by the Free Software Foundation or the Open Source Initiative)"
   * "Except as set out above, you keep all right, title, and interest in your contribution."
 
+- If you feal like you can't contribute because of this, please send me a mail or open a issue.
 
 ## Licensing
 
