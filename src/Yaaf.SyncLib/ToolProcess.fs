@@ -102,9 +102,10 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
             let c = new System.Collections.Generic.List<_>()
             toolProcess.OutputDataReceived 
                 |> Event.add (fun data ->
-                    match lineReceived(data.Data) with                    
-                    | Option.Some t -> c.Add(t)
-                    | Option.None -> ()
+                    if data.Data <> null then
+                        match lineReceived(data.Data) with                    
+                        | Option.Some t -> c.Add(t)
+                        | Option.None -> ()
                     )
             
             do! x.RunAsync()
@@ -116,9 +117,10 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
             let c = new System.Collections.Generic.List<_>()
             toolProcess.ErrorDataReceived 
                 |> Event.add (fun data ->
-                    match errorReceived(data.Data) with
-                    | Option.Some t -> c.Add(t)
-                    | Option.None -> ()
+                    if data.Data <> null then
+                        match errorReceived(data.Data) with
+                        | Option.Some t -> c.Add(t)
+                        | Option.None -> ()
                     )
             
             let! output = x.RunWithOutputAsync(lineReceived)
