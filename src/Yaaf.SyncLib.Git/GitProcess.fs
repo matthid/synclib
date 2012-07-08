@@ -199,6 +199,15 @@ module HandleGitData =
             let cp = convertToResovedPath p
             cp, cp
 
+    let parseStatusLine (l:string) = 
+        let p1, p2 = convertArrowPath (l.Substring(3))
+        let s1 = convertToStatus l.[0]
+        let s2 = convertToStatus l.[1]
+        { 
+            Local = { Status = s1; Path = p1}; 
+            Server = { Status = s2; Path = p2}
+        }
+
 module GitProcess = 
     let createGitProc (gitPath:string) (workingDir:string) (args:GitArguments) = 
         new ToolProcess(gitPath, workingDir, HandleGitArguments.toCommandLine(args))
@@ -240,17 +249,7 @@ module GitProcess =
         asyncTrace() {
             use gitProc = createGitProc git wDir Status
             return!
-                gitProc.RunWithOutputAsync(fun l ->
-                    if (System.String.IsNullOrEmpty(l)) then Option.None
-                    else
-                        let p1, p2 = HandleGitData.convertArrowPath (l.Substring(3))
-                        let s1 = HandleGitData.convertToStatus l.[0]
-                        let s2 = HandleGitData.convertToStatus l.[1]
-                        Option.Some { 
-                            Local = { Status = s1; Path = p1}; 
-                            Server = { Status = s2; Path = p2}
-                        }
-                )
+                gitProc.RunWithOutputAsync (HandleGitData.parseStatusLine >> Some) 
         }
 
     let RunGitStatus git wDir = 

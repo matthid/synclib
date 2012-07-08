@@ -37,8 +37,11 @@
   <Import Project="$(MSBuildExtensionsPath32)\FSharp\1.0\Microsoft.FSharp.Targets" Condition="!Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
   <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft F#\v4.0\Microsoft.FSharp.Targets" Condition=" Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
   <ItemGroup>
-    <Compile Include="Program.fs" />
     <None Include="App.config" />
+    <Compile Include="BackendTester.fs" />
+    <Compile Include="GitTesting.fs" />
+    <Compile Include="SvnTesting.fs" />
+    <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />
@@ -51,6 +54,11 @@
     <ProjectReference Include="..\Yaaf.SyncLib.Git\Yaaf.SyncLib.Git.fsproj">
       <Name>Yaaf.SyncLib.Git</Name>
       <Project>{c75a3d77-43cd-419e-96b4-f308b05de1b5}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Yaaf.SyncLib.Svn\Yaaf.SyncLib.Svn.fsproj">
+      <Name>Yaaf.SyncLib.Svn</Name>
+      <Project>{f7dbf542-b3f1-4163-ac29-bf16c6633211}</Project>
       <Private>True</Private>
     </ProjectReference>
     <ProjectReference Include="..\Yaaf.SyncLib\Yaaf.SyncLib.fsproj">

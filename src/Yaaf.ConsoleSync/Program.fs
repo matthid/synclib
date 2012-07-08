@@ -3,56 +3,22 @@
 // file 'LICENSE.txt', which is part of this source code package.
 // ----------------------------------------------------------------------------
 
-open Yaaf.SyncLib
-open Yaaf.SyncLib.Git
+open GitTesting
+open SvnTesting
 
-// Creating a backendmanager (required once per backend)
-let backendManager = new GitBackendManager() :> IBackendManager
-   
-// Create a manager for a specific folder
-let manager =
-    backendManager.CreateFolderManager(
-        new ManagedFolderInfo(
-            "SomeName", 
-            "D:\\Documents",
-            "git@localdevserver:mydata.git",
-            "",
-            new System.Collections.Generic.Dictionary<_,_>()))
-
-// Listen to the events
-manager.ProgressChanged
-    |> Event.add (fun p -> printfn "New Progress %s" (p.ToString()))
-
-manager.SyncConflict
-    |> Event.add 
-        (fun conf -> 
-            match conf with
-            | SyncConflict.Unknown(s) -> printfn "Unknown Conflict: %s" s)
-
-manager.SyncError
-    |> Event.add
-        (fun error -> 
-            match error with
-            | SshException(message, log) ->
-                
-                printfn "%s" message
-                printfn ">> Stopped the service!"
-                printfn ">> open a console and execute \"%s\" and if you are asked type \"yes\"" "ssh.exe git@yourserver"
-                manager.StopService()
-            | ToolProcessFailed(errorCode, cmd, output, errorOutput) -> printfn "Unknown Tool Error(%s): %d, %s, %s" cmd errorCode output errorOutput
-            | _ -> printfn "Error: %s" (error.ToString()))
-
-manager.SyncStateChanged
-    |> Event.add
-        (fun changed -> printfn "State changed: %s" (changed.ToString()))
+let myManagers = [
+    GitTesting.createManager "Documents" "D:\\Documents" "git@localdevserver:mydata.git" 
+    SvnTesting.createManager "ppp" "D:\\Test" "https://subversion.assembla.com/svn/parallel-proggn/trunk/Blatt0" ]
 
 // Start the service
-manager.StartService()
-printfn ">> Started, any key to exit the service"
+for manager in myManagers do
+    manager.StartService()
+printfn ">> Started, any key to exit the services"
 System.Console.ReadLine() |> ignore
 
 // Stop the service to no listen to the folder any longer (any running operations will be finished)
-manager.StopService()
+for manager in myManagers do
+    manager.StopService()
 
 printfn ">> Stopped, any key to exit the program"
 
