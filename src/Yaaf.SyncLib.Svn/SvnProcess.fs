@@ -86,6 +86,49 @@ type SvnStatusLine = {
     FilePath : string
     }
 
+/// Data returned by the "svn info" command
+type SvnInfo = {
+    /// .
+    Path : string
+    /// /home/me/folder
+    WorkingDirRoot : string
+    /// https://server.com/svn/root/trunk/CurrentFolder
+    Url : string
+    /// https://server.com/svn/root
+    RepositoryRoot : string
+    /// 454b96c5-00da-4618-90ec-f94890f0cf31
+    RepositoryUUID : string
+    /// 123
+    Revision : int
+    /// directory
+    Kind : string
+    /// normal
+    Schedule : string
+    /// blub@gmail.com
+    LastAuthor : string
+    /// 26
+    LastRevision : int
+    /// 2012-05-06 17:02:39 +0200 (So, 06 Mai 2012)
+    LastChanged : System.DateTime
+    }
+
+type SvnUpdateType =
+    /// (A) Added 
+    | Added
+    /// (D) Deleted
+    | Deleted
+    /// (U) Updated
+    | Updated
+    /// (C) Conflict
+    | Conflicting
+    /// (G) Merged
+    | Merged
+    
+type SvnUpdateInfo = 
+    /// Updated to revision 32.
+    | FinishedRevision of int
+    /// A  newdir/launch.c
+    | FinishedFile of SvnUpdateType * string
 module HandleSvnData = 
     /// this will will parse a line given by "svn status --show-updates"
     let parseStatusLine (l:string) = 
@@ -95,8 +138,8 @@ module HandleSvnData =
         ChangeType =
             match l.[0] with
             | ' ' -> SvnStatusLineChangeType.None
-            | 'A' -> Added
-            | 'D' -> Deleted
+            | 'A' -> SvnStatusLineChangeType.Added
+            | 'D' -> SvnStatusLineChangeType.Deleted
             | 'M' -> Modified
             | 'R' -> Replaced
             | 'C' -> ContentConflict
@@ -156,12 +199,28 @@ module HandleSvnData =
             | _ -> Option.None
         FilePath = System.String.Join(" ", restParams |> Seq.skip 1).Trim() 
         }
+    let parseUpdateLine line = 
+        match line with
+            | StartsWith "Updated to revision " rest -> //Rest="234."
+                FinishedRevision(System.Int32.Parse(rest.Substring(0, rest.Length-1)))
+            | _ ->
+                let filePath = line.Substring(2).Trim()
+                let svnType = 
+                    match line.[0] with
+                    | 'A' -> SvnUpdateType.Added
+                    | 'C' -> SvnUpdateType.Conflicting
+                    | 'D' -> SvnUpdateType.Deleted
+                    | 'G' -> SvnUpdateType.Merged
+                    | 'U' -> SvnUpdateType.Updated
+                    | _ -> failwith (sprintf "Unknown SVN Update type: \"%c\"" line.[0])
+                FinishedFile (svnType, filePath)
 
-exception SvnStatusNotWorkingDir
+exception SvnNotWorkingDir
 module SvnProcess = 
     let svnErrorFun error = 
         match error with
-        | ContainsAll ["warning: W155007: ";" is not a working copy"] -> raise SvnStatusNotWorkingDir
+        | ContainsAll ["warning: W155007: ";" is not a working copy"] -> raise SvnNotWorkingDir
+        | ContainsAll ["svn: E155007: "; " is not a working copy"] -> raise SvnNotWorkingDir
         | _ -> Option.None
     let checkout svn local remote = asyncTrace() {
         let svnProc = new ToolProcess(svn, local, sprintf "checkout \"%s\" ." remote)
@@ -173,12 +232,70 @@ module SvnProcess =
 
     let status svn local = asyncTrace() {
         let svnProc = new ToolProcess(svn, local, sprintf "status --show-updates")
-        let! output, error = svnProc.RunWithErrorOutputAsync(
-            (fun line -> 
-                match line with
-                /// Ignore last Line
-                | Contains "Status against revision:" -> Option.None
-                /// Parse Line
-                | _ -> Some <| HandleSvnData.parseStatusLine line), svnErrorFun)
+        let! output, error = 
+            svnProc.RunWithErrorOutputAsync(
+                (fun line -> 
+                    match line with
+                    /// Ignore last Line
+                    | Contains "Status against revision:" -> Option.None
+                    /// Parse Line
+                    | _ -> Some <| HandleSvnData.parseStatusLine line), 
+                svnErrorFun)
         return output
+    }
+
+    let info svn local = asyncTrace() {
+        let svnProc = new ToolProcess(svn, local, sprintf "info")
+        let! output, error = 
+            svnProc.RunWithErrorOutputAsync(
+                (fun line ->
+                    match line with
+                    | Equals "" -> Option.None
+                    | _ -> 
+                        Some <|
+                            match line with
+                            | StartsWith "Path: " rest -> rest // .
+                            | StartsWith "Working Copy Root Path: " rest -> rest // /home/me/folder
+                            | StartsWith "URL: " rest -> rest // https://server.com/svn/root/trunk/Blatt0
+                            | StartsWith "Repository Root: " rest -> rest // https://server.com/svn/root
+                            | StartsWith "Repository UUID: " rest -> rest // 454b96c5-00da-4618-90ec-f94890f0cf31
+                            | StartsWith "Revision: " rest -> rest // 123
+                            | StartsWith "Node Kind: " rest -> rest // directory
+                            | StartsWith "Schedule: " rest -> rest // normal
+                            | StartsWith "Last Changed Author: " rest -> rest // blub@gmail.com
+                            | StartsWith "Last Changed Rev: " rest -> rest // 26
+                            | StartsWith "Last Changed Date: " rest -> rest // 2012-05-06 17:02:39 +0200 (So, 06 Mai 2012)
+                            | _ -> failwith (sprintf "SVN: unknown info line \"%s\"" line)),
+                svnErrorFun)
+        
+        let outputData = 
+            match output |> Seq.toList with
+            | [path; workingDirRoot; url; repRoot; repUUID; rev; kind; schedule; lastAuthor; lastRev; lastChanged ] -> 
+                {
+                    Path = path
+                    WorkingDirRoot = workingDirRoot
+                    Url = url
+                    RepositoryRoot = repRoot
+                    RepositoryUUID = repUUID
+                    Revision = System.Int32.Parse rev
+                    Kind = kind
+                    Schedule = schedule
+                    LastAuthor = lastAuthor
+                    LastRevision = System.Int32.Parse lastRev
+                    LastChanged = System.DateTime.Parse(lastChanged.Substring(0,19))
+                }
+            | _ -> failwith "invalid svn info data received!"
+
+        return outputData
+    }
+
+    let update svn local receivedLine = asyncTrace() {
+        let svnProc = new ToolProcess(svn, local, sprintf "update")
+        do! svnProc.RunWithErrorOutputAsync(
+                (fun line ->
+                    if (line <> "") then                           
+                        line |> HandleSvnData.parseUpdateLine |> receivedLine
+                    Option.None),
+                svnErrorFun)
+            |> AsyncTrace.Ignore
     }

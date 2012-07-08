@@ -66,9 +66,9 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
             
 
     /// Resolves Conflicts and 
-    let resoveConflicts() = asyncTrace() {
+    let resolveConflicts() = asyncTrace() {
         let! (t:ITracer) = AsyncTrace.traceInfo()
-        t.logVerb "Resolving Conflicts in %s" folder.Name
+        t.logVerb "Resolving GIT Conflicts in %s" folder.Name
         let! fileStatus = GitProcess.RunGitStatusAsync git (folder.FullPath)
         for f in fileStatus do
             if (f.Local.Path.EndsWith(".sparkleshare") || f.Local.Path.EndsWith(".empty")) then
@@ -151,14 +151,14 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
     /// Initialize the repository
     let init() = asyncTrace() {
         let! (t:ITracer) = AsyncTrace.traceInfo()
-        t.logInfo "Init Repro %s" folder.Name
+        t.logInfo "Init GIT Repro %s" folder.Name
         // Check if repro is initialized (ie is a git repro)
         try
             do! GitProcess.RunGitStatusAsync git (folder.FullPath) |> AsyncTrace.Ignore
         with
         | ToolProcessFailed(code, cmd, output, error) 
             when error.Contains "fatal: Not a git repository (or any of the parent directories): .git" ->
-            t.logWarn "%s is no Repro so init one" folder.Name
+            t.logWarn "%s is no GIT Repro so init one" folder.Name
             do! GitProcess.RunGitInitAsync git (folder.FullPath)
                 
                     
@@ -197,7 +197,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
         try
             if not isInit then do! init()
 
-            t.logInfo "Starting Syncdown of %s" folder.Name
+            t.logInfo "Starting GIT Syncdown of %s" folder.Name
 
             // Fetch changes
             do! GitProcess.RunGitFetchAsync 
@@ -211,7 +211,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
             // Merge changes into local directory via "git rebase FETCH_HEAD"
             do! commitAllChanges()
             try
-                t.logInfo "Starting SyncDown-Merging of %s" folder.Name
+                t.logInfo "Starting GIT SyncDown-Merging of %s" folder.Name
                 do! GitProcess.RunGitRebaseAsync git folder.FullPath (Start("FETCH_HEAD", "master"))
             with
                 | ToolProcessFailed(exitCode, cmd, o, e) ->
@@ -226,7 +226,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                         syncConflict.Trigger (SyncConflict.Unknown errorMsg)
                     
                         // Resolve conflict
-                        do! resoveConflicts()
+                        do! resolveConflicts()
         finally 
             progressChanged.Trigger 1.0
     }
@@ -235,7 +235,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
     let syncUp() = asyncTrace() {
         let! (t:ITracer) = AsyncTrace.traceInfo()
         try
-            t.logInfo "Starting SyncUp of %s" folder.Name
+            t.logInfo "Starting GIT SyncUp of %s" folder.Name
             progressChanged.Trigger 0.0
 
             // Push data up to server

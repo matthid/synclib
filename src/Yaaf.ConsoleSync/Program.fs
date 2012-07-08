@@ -11,6 +11,11 @@ open Yaaf.SyncLib.Svn
 open Yaaf.SyncLib.Helpers
 open Yaaf.SyncLib.Helpers.AsyncTrace
 
+let data = 
+    SvnProcess.info @"C:\Program Files\TortoiseSVN\bin\svn.exe" @"D:\Test"  
+    |> AsyncTrace.SetDefaultTracer "Debug" 
+    |> Async.RunSynchronously
+
 let myManagers = [
         //GitTesting.createManager "Documents" "D:\\Documents" "git@localdevserver:mydata.git" 
         SvnTesting.createManager "ppp" "D:\\Test2" "https://subversion.assembla.com/svn/parallel-proggn/trunk/Blatt0" 
