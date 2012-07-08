@@ -14,13 +14,10 @@ open System.Threading
 
 module Seq =
     let tryTake (n : int) (s : _ seq) =
-        let e = s.GetEnumerator ()
-        let i = ref 0
-        seq {
-            while e.MoveNext () && !i < n do
-                i := !i + 1
-                yield e.Current
-        }
+        s 
+            |> Seq.mapi (fun i t -> i < n, t)
+            |> Seq.takeWhile (fun (shouldTake, t) -> shouldTake)
+            |> Seq.map (fun (shouldTake, t) -> t)
         
 type ITracer = 
     abstract member log : Diagnostics.TraceEventType ->Printf.StringFormat<'a, unit> -> 'a
