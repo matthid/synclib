@@ -6,9 +6,15 @@
 open GitTesting
 open SvnTesting
 
+open Yaaf.SyncLib
+open Yaaf.SyncLib.Svn
+open Yaaf.SyncLib.Helpers
+open Yaaf.SyncLib.Helpers.AsyncTrace
+
 let myManagers = [
-    GitTesting.createManager "Documents" "D:\\Documents" "git@localdevserver:mydata.git" 
-    SvnTesting.createManager "ppp" "D:\\Test" "https://subversion.assembla.com/svn/parallel-proggn/trunk/Blatt0" ]
+        //GitTesting.createManager "Documents" "D:\\Documents" "git@localdevserver:mydata.git" 
+        SvnTesting.createManager "ppp" "D:\\Test2" "https://subversion.assembla.com/svn/parallel-proggn/trunk/Blatt0" 
+    ]
 
 // Start the service
 for manager in myManagers do

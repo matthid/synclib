@@ -5,13 +5,14 @@
 namespace Yaaf.SyncLib.Svn
 
 
-
-open System.Diagnostics
-open System.IO
 open Yaaf.SyncLib
 open Yaaf.SyncLib.Helpers
 open Yaaf.SyncLib.Helpers.AsyncTrace
+open Yaaf.SyncLib.Helpers.MatchHelper
 
+
+open System.Diagnostics
+open System.IO
 ///The first column indicates that an item was added, deleted, or otherwise changed:
 type SvnStatusLineChangeType =
     /// ( ) No modifications.
@@ -52,11 +53,11 @@ type SvnStatusLockInformation =
     | None
     /// (K) File is locked in this working copy.
     | FileLocked
-    /// File is locked either by another user or in another working copy. This appears only when --show-updates (-u) is used.
+    /// (O) File is locked either by another user or in another working copy. This appears only when --show-updates (-u) is used.
     | LockedByOtherUser
-    /// File was locked in this working copy, but the lock has been “stolen” and is invalid. The file is currently locked in the repository. This appears only when --show-updates (-u) is used.
+    /// (T) File was locked in this working copy, but the lock has been “stolen” and is invalid. The file is currently locked in the repository. This appears only when --show-updates (-u) is used.
     | LockStolen
-    ///File was locked in this working copy, but the lock has been “broken” and is invalid. The file is no longer locked. This appears only when --show-updates (-u) is used.
+    /// (B) File was locked in this working copy, but the lock has been “broken” and is invalid. The file is no longer locked. This appears only when --show-updates (-u) is used.
     | LockInvalid
 
 /// status of working copy files and directories.
@@ -79,18 +80,89 @@ type SvnStatusLine = {
     /// (*) The out-of-date information appears in the ninth column (only if you pass the --show-updates (-u) option):
     IsOutOfDate : bool
     /// The remaining fields are variable width and delimited by spaces. The working revision is the next field if the --show-updates (-u) or --verbose (-v) option is passed.
-    Revision : int
+    Revision : int option
     /// If the --verbose (-v) option is passed, the last committed revision and last committed author are displayed next.
     /// The working copy path is always the final field, so it can include spaces.
     FilePath : string
     }
 
 module HandleSvnData = 
-    let parseStatusLine l = 
-        l
+    /// this will will parse a line given by "svn status --show-updates"
+    let parseStatusLine (l:string) = 
+        if (l.[7] <> ' ') then failwith "The eighth column should be blank"
+        let restParams = l.Substring(9).Split([|' '|])
+        {
+        ChangeType =
+            match l.[0] with
+            | ' ' -> SvnStatusLineChangeType.None
+            | 'A' -> Added
+            | 'D' -> Deleted
+            | 'M' -> Modified
+            | 'R' -> Replaced
+            | 'C' -> ContentConflict
+            | 'X' -> ExternalDefinition
+            | 'I' -> Ignored
+            | '?' -> NotInSourceControl
+            | '!' -> ItemMissing
+            | '~' -> MissVersioned
+            | _ -> failwith (sprintf "Unknown svn changetype %c (first status column)" l.[0])
+        Properties = 
+            match l.[1] with
+            | ' ' -> SvnStatusProperties.None
+            | 'M' -> SvnStatusProperties.PropModified
+            | 'C' -> SvnStatusProperties.PropConflict
+            | _ -> failwith (sprintf "Unknown svn property %c (secound status column)" l.[1])
 
+        IsLocked = 
+            match l.[2] with
+            | ' ' -> false
+            | 'L' -> true
+            | _ -> failwith (sprintf "Unknown svn property %c (third status column)" l.[2])
+
+        ScheduledForAddingWithHistory =
+            match l.[3] with
+            | ' ' -> false
+            | '+' -> true
+            | _ -> failwith (sprintf "Unknown svn property %c (fourth status column)" l.[3])
+            
+        SwitchedRelative =
+            match l.[4] with
+            | ' ' -> false
+            | 'S' -> true
+            | _ -> failwith (sprintf "Unknown svn property %c (fifth status column)" l.[4])
+
+        LockInformation = 
+            match l.[5] with
+            | ' ' -> SvnStatusLockInformation.None
+            | 'K' -> SvnStatusLockInformation.FileLocked
+            | 'O' -> SvnStatusLockInformation.LockedByOtherUser
+            | 'T' -> SvnStatusLockInformation.LockStolen
+            | 'B' -> SvnStatusLockInformation.LockInvalid
+            | _ -> failwith (sprintf "Unknown svn property %c (sixth status column)" l.[5])
+           
+        IsTreeConflict = 
+            match l.[6] with
+            | ' ' -> false
+            | 'C' -> true
+            | _ -> failwith (sprintf "Unknown svn property %c (seventh status column)" l.[6])
+        IsOutOfDate = 
+            match l.[8] with
+            | ' ' -> false
+            | '*' -> true
+            | _ -> failwith (sprintf "Unknown svn property %c (ninth status column)" l.[8])
+        Revision = 
+            match System.Int32.TryParse(restParams.[0]) with
+            | true, value -> Some value
+            | _ -> Option.None
+        FilePath = System.String.Join(" ", restParams |> Seq.skip 1).Trim() 
+        }
+
+exception SvnStatusNotWorkingDir
 module SvnProcess = 
-    
+    let svnErrorFun error = 
+        match error with
+        | ContainsAll ["warning: W155007: ";" is not a working copy"] -> raise SvnStatusNotWorkingDir
+        | _ -> Option.None
     let checkout svn local remote = asyncTrace() {
         let svnProc = new ToolProcess(svn, local, sprintf "checkout \"%s\" ." remote)
         do! svnProc.RunAsync() }
@@ -101,5 +173,12 @@ module SvnProcess =
 
     let status svn local = asyncTrace() {
         let svnProc = new ToolProcess(svn, local, sprintf "status --show-updates")
-        return! svnProc.RunWithOutputAsync (HandleSvnData.parseStatusLine >> Some)
+        let! output, error = svnProc.RunWithErrorOutputAsync(
+            (fun line -> 
+                match line with
+                /// Ignore last Line
+                | Contains "Status against revision:" -> Option.None
+                /// Parse Line
+                | _ -> Some <| HandleSvnData.parseStatusLine line), svnErrorFun)
+        return output
     }
