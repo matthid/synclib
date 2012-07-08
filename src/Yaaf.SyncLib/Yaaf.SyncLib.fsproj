@@ -57,7 +57,9 @@
     <None Include="..\..\Readme.md">
       <Link>Readme.md</Link>
     </None>
-    <None Include="Usage.md" />
+    <None Include="..\..\Usage.md">
+      <Link>Usage.md</Link>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <Reference Include="mscorlib" />
