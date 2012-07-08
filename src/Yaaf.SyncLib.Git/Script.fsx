@@ -22,7 +22,6 @@ let manager =
             "SomeName", 
             "D:\\Documents",
             "git@localdevserver:mydata.git",
-            "git",
             "",
             new System.Collections.Generic.Dictionary<_,_>()))
 manager.ProgressChanged
