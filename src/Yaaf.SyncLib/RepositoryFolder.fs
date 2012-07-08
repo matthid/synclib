@@ -12,6 +12,15 @@ type ProcessorMessage =
     | DoSyncUp
     | DoSyncDown
 
+type CommitMessageChangeType =
+    | Added | Deleted | Renamed | Updated
+
+type CommitMessageFile = {
+    ChangeType : CommitMessageChangeType
+    FilePath : string 
+    FilePathRename : string }
+    
+
 /// A IManagedFolder implementation for repositories (git, svn ...)
 [<AbstractClass>]
 type RepositoryFolder(folder : ManagedFolderInfo) as x = 
@@ -86,6 +95,33 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
     member x.RequestSyncDown () = 
         processor.Post(DoSyncDown)
 
+    member x.GenerateCommitMessage (files:CommitMessageFile seq) = 
+        let commitMessage =
+            files
+                |> Seq.filter (fun f -> f.ChangeType <> CommitMessageChangeType.Updated || not (f.FilePath.EndsWith(".empty")))
+                |> Seq.map (fun f -> 
+                                if f.FilePath.EndsWith(".empty") then
+                                    { f with FilePath = f.FilePath.Substring(0, 6) }
+                                else f)
+                |> Seq.collect 
+                    (fun f ->
+                        seq {
+                            match f.ChangeType with
+                            | CommitMessageChangeType.Added -> yield sprintf "+ '%s'" f.FilePath
+                            | CommitMessageChangeType.Updated -> yield sprintf "/ '%s'" f.FilePath
+                            | CommitMessageChangeType.Deleted -> yield sprintf "- '%s'" f.FilePath
+                            | CommitMessageChangeType.Renamed -> 
+                                yield sprintf "- '%s'" f.FilePath
+                                yield sprintf "+ '%s'" f.FilePathRename
+                        })
+                |> Seq.tryTake 20
+                |> Seq.fold (fun state item -> sprintf "%s\n%s" state item) ""
+
+        (commitMessage + 
+            if (files |> Seq.length > 20) 
+            then "..."
+            else "").TrimEnd()
+        
     /// Reports an error (this should be protected, but this is not available in F#)
     member x.ReportError exn = syncError.Trigger exn
 
