@@ -18,19 +18,19 @@
     <DebugType>full</DebugType>
     <Optimize>false</Optimize>
     <Tailcalls>false</Tailcalls>
-    <OutputPath>bin\Debug\</OutputPath>
+    <OutputPath>bin\Debug\lib</OutputPath>
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
-    <DocumentationFile>bin\Debug\Yaaf.SyncLib.Ui.XML</DocumentationFile>
+    <DocumentationFile>bin\Debug\lib\Yaaf.SyncLib.Ui.XML</DocumentationFile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
     <DebugType>pdbonly</DebugType>
     <Optimize>true</Optimize>
     <Tailcalls>true</Tailcalls>
-    <OutputPath>bin\Release\</OutputPath>
+    <OutputPath>bin\Release\lib\</OutputPath>
     <DefineConstants>TRACE</DefineConstants>
     <WarningLevel>3</WarningLevel>
-    <DocumentationFile>bin\Release\Yaaf.SyncLib.Ui.XML</DocumentationFile>
+    <DocumentationFile>bin\Release\lib\Yaaf.SyncLib.Ui.XML</DocumentationFile>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="atk-sharp">
@@ -64,8 +64,12 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="GtkUtils.fs" />
+    <Compile Include="PosixHelper.fs" />
+    <Compile Include="GtkNotification.fs" />
     <Compile Include="Scripting.fs" />
-    <None Include="Script.fsx" />
+    <None Include="RunApplication.fsx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Yaaf.SyncLib.Git\Yaaf.SyncLib.Git.fsproj">
@@ -86,6 +90,9 @@
   </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath32)\FSharp\1.0\Microsoft.FSharp.Targets" Condition="!Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
   <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft F#\v4.0\Microsoft.FSharp.Targets" Condition=" Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
+  <PropertyGroup>
+    <PostBuildEvent>move "$(ProjectDir)$(OutDir)RunApplication.fsx" "$(ProjectDir)$(OutDir)..\RunApplication.fsx"</PostBuildEvent>
+  </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
 	     Other similar extension points exist, see Microsoft.Common.targets.
 	<Target Name="BeforeBuild">

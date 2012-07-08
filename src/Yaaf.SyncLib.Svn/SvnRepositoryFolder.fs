@@ -26,6 +26,23 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
     let mutable isInit = false
     let svnPath = folder.Additional.["svnpath"]
 
+    do
+        // Start watching
+        localWatcher.Changed
+            // Filter svn directory
+            |> Event.filter 
+                (fun (changeType, oldPath, newPath)-> 
+                    let gitPath = Path.Combine(folder.FullPath, ".svn")
+                    not (oldPath.StartsWith gitPath) && not (newPath.StartsWith gitPath))
+            // Reduce event
+            |> Event.reduceTime (System.TimeSpan.FromMinutes(1.0))
+            |> Event.add (fun args -> 
+                x.RequestSyncUp())
+
+        remoteWatcher.Changed 
+            |> Event.add 
+                (fun l -> x.RequestSyncDown())
+
     let init() = asyncTrace() {
         let! (t:ITracer) = AsyncTrace.traceInfo()
         t.logInfo "Init SVN Repro %s" folder.Name
