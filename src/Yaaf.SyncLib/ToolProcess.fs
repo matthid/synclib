@@ -26,6 +26,28 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
                     WorkingDirectory = workingDir,
                     CreateNoWindow = true,
                     Arguments = arguments))
+
+    let addReceiveEvent event f = 
+        let c = new System.Collections.Generic.List<_>()
+        let customExn = ref null
+        event
+            |> Event.add (fun (data:DataReceivedEventArgs) ->
+                try
+                    // When there is data and we have no user exception
+                    if data.Data <> null && !customExn = null then
+                        match f(data.Data) with                    
+                        | Option.Some t -> c.Add(t)
+                        | Option.None -> ()
+                with exn ->
+                    try
+                        toolProcess.Kill()
+                    with
+                        // already finished
+                        | :? System.InvalidOperationException -> ()
+                    customExn := exn
+                )
+        c, customExn
+
     do 
         toolProcess.EnableRaisingEvents <- false
 
@@ -51,6 +73,9 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
             toolProcess.ErrorDataReceived 
                 |> Event.add (fun data ->
                     if (data.Data <> null) then
+                        #if DEBUG
+                        printfn "Error Line Received: %s" data.Data
+                        #endif
                         t.logVerb "Received Error Line %s" data.Data
                         (!errorBuilder).AppendLine(data.Data) |> ignore)
             
@@ -58,6 +83,9 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
             toolProcess.OutputDataReceived 
                 |> Event.add (fun data ->
                     if (data.Data <> null) then
+                        #if DEBUG
+                        printfn "Line Received: %s" data.Data
+                        #endif
                         t.logVerb "Received Line %s" data.Data
                         (!outputBuilder).AppendLine(data.Data) |> ignore)
 
@@ -96,33 +124,19 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
             toolProcess.StandardInput
             
 
+
     member x.RunWithOutputAsync(lineReceived) = 
         asyncTrace() {
-            
-            let c = new System.Collections.Generic.List<_>()
-            toolProcess.OutputDataReceived 
-                |> Event.add (fun data ->
-                    if data.Data <> null then
-                        match lineReceived(data.Data) with                    
-                        | Option.Some t -> c.Add(t)
-                        | Option.None -> ()
-                    )
-            
+            let c, customExn = addReceiveEvent toolProcess.OutputDataReceived  lineReceived
             do! x.RunAsync()
+            if (!customExn <> null) then raise !customExn
             return c
         }
 
     member x.RunWithErrorOutputAsync(lineReceived, errorReceived) = 
         asyncTrace() {
-            let c = new System.Collections.Generic.List<_>()
-            toolProcess.ErrorDataReceived 
-                |> Event.add (fun data ->
-                    if data.Data <> null then
-                        match errorReceived(data.Data) with
-                        | Option.Some t -> c.Add(t)
-                        | Option.None -> ()
-                    )
-            
-            let! output = x.RunWithOutputAsync(lineReceived)
+            let c, customExn = addReceiveEvent toolProcess.ErrorDataReceived errorReceived
+            let! output = x.RunWithOutputAsync(lineReceived)            
+            if (!customExn <> null) then raise !customExn
             return output, c
         }

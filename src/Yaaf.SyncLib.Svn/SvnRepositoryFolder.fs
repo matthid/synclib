@@ -7,6 +7,7 @@ namespace Yaaf.SyncLib.Svn
 open Yaaf.SyncLib
 open Yaaf.SyncLib.Helpers
 open Yaaf.SyncLib.Helpers.AsyncTrace
+open Yaaf.SyncLib.Helpers.MatchHelper
 open Yaaf.SyncLib.Svn
 
 open System.IO
@@ -26,9 +27,68 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
     let svnPath = folder.Additional.["svnpath"]
 
     let init() = asyncTrace() {
+        let! (t:ITracer) = AsyncTrace.traceInfo()
+        t.logInfo "Init SVN Repro %s" folder.Name
+        // Check if repro is initialized (ie is a git repro)
+        try
+            do! SvnProcess.status svnPath (folder.FullPath) |> AsyncTrace.Ignore
+        with
+        | SvnNotWorkingDir ->
+            t.logWarn "%s is no SVN Repro so init it" folder.Name
+            do! SvnProcess.checkout svnPath folder.FullPath folder.Remote
+                
+                
+        
+        // Check whether the remote url matches
+        let! svnInfo = SvnProcess.info svnPath (folder.FullPath)
+        if (svnInfo.Url <> folder.Remote) then failwith (invalidOp "SVN Url does not match!")
 
+        isInit <- true
+    }
 
-        return ()
+    let resolveConflicts () = asyncTrace() {
+        let! items = SvnProcess.status svnPath (folder.FullPath)
+        let conflicting = 
+            items
+                |> Seq.filter (fun item -> item.ChangeType = SvnStatusLineChangeType.ContentConflict)
+        for conflict in conflicting do
+            let filePath = conflict.FilePath
+            let relpath = Path.GetDirectoryName filePath
+            let filename = Path.GetFileNameWithoutExtension filePath
+            let extension = Path.GetExtension filePath
+            let minename = sprintf "%s%s.mine" filename extension
+            let newName = 
+                sprintf "%s (conflicting on %s)%s"
+                    filename
+                    (System.DateTime.Now.ToString("yyyy-MM-dd_hh-mm-ss"))
+                    extension
+            let conflictname = sprintf "%s%s.r" filename extension
+            let maxrev =
+                Directory.EnumerateFiles(
+                    Path.Combine(folder.FullPath, relpath),
+                    sprintf "%s*" conflictname)
+                    // Only name
+                    |> Seq.map (fun fullpath -> fullpath.Substring(folder.FullPath.Length + 1 + relpath.Length + 1))
+                    |> Seq.map 
+                        (fun name -> 
+                            match name with
+                            | StartsWith conflictname rest -> System.Int32.Parse(rest)
+                            | _ -> failwith (sprintf "no conflict file %s" name))
+                    |> Seq.max
+            // Copy my version to "(conflicting)"
+            File.Copy(
+                Path.Combine(folder.FullPath, relpath, minename),
+                Path.Combine(folder.FullPath, relpath, newName),
+                true)
+
+            // Copy replace current copy with server version
+            File.Copy(
+                Path.Combine(folder.FullPath, relpath, sprintf "%s%d" conflictname maxrev),
+                Path.Combine(folder.FullPath, filePath),
+                true)
+
+            // Mark as solved 
+            do! SvnProcess.resolved svnPath folder.FullPath filePath
     }
 
     let syncDown() = asyncTrace() {
@@ -37,42 +97,88 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
         try
             if not isInit then do! init()
 
-            t.logInfo "Starting Syncdown of %s" folder.Name
+            t.logInfo "Starting SVN Syncdown of %s" folder.Name
+            /// counting the items to update
+            let! items = SvnProcess.status svnPath (folder.FullPath)
+            let updateItemsCount =
+                let t =
+                    items
+                        |> Seq.filter (fun item -> item.IsOutOfDate)
+                        |> Seq.length
+                if t = 0 then 1.0 else float t
 
-//            // Fetch changes
-//            do! GitProcess.RunGitFetchAsync 
-//                    git 
-//                    folder.FullPath 
-//                    remoteName
-//                    "master"
-//                    (fun newProgress -> progressChanged.Trigger (newProgress * 0.95))
-//                |> AsyncTrace.Ignore
-//
-//            // Merge changes into local directory via "git rebase FETCH_HEAD"
-//            do! commitAllChanges()
-//            try
-//                t.logInfo "Starting SyncDown-Merging of %s" folder.Name
-//                do! GitProcess.RunGitRebaseAsync git folder.FullPath (Start("FETCH_HEAD", "master"))
-//            with
-//                | ToolProcessFailed(exitCode, cmd, o, e) ->
-//                    match e with
-//                    | Contains "fatal: no such branch: master" ->
-//                        repairMasterBranch()
-//                        x.RequestSyncDown()
-//                    | _ ->
-//                        let errorMsg = (sprintf "Cmd: %s, Code: %d, Output: %s, Error %s" cmd exitCode o e)
-//                        t.logWarn "Conflict while Down-Merging of %s: %s" folder.Name errorMsg
-//                        // Conflict
-//                        syncConflict.Trigger (SyncConflict.Unknown errorMsg)
-//                    
-//                        // Resolve conflict
-//                        do! resoveConflicts()
+            // Starting the update
+            let finishedFileCount = ref 0
+            let conflictFile = ref false
+            do! SvnProcess.update 
+                    svnPath 
+                    folder.FullPath
+                    (fun updateFinished ->
+                        match updateFinished with
+                        | FinishedFile(updateType, propType, file) ->
+                            match updateType with
+                            | SvnUpdateType.Conflicting -> 
+                                syncConflict.Trigger (SyncConflict.Unknown (sprintf "file %s is conflicting" file))
+                                conflictFile := true
+                            | _ -> ()
+                            finishedFileCount := !finishedFileCount + 1
+                            progressChanged.Trigger (0.95 * float (!finishedFileCount) / updateItemsCount)
+                        | _ -> ())
+
+            // Conflict resolution
+            if (!conflictFile) then
+                // Resolve conflict
+                do! resolveConflicts()
         finally 
             progressChanged.Trigger 1.0
     }
 
     let syncUp() = asyncTrace() {
-        return ()
+        // get status
+        let! items = SvnProcess.status svnPath (folder.FullPath)
+
+        // add all changes to svn
+        for (toAdd, item) in items
+                |> Seq.filter 
+                    (fun i -> i.ChangeType = SvnStatusLineChangeType.NotInSourceControl
+                           ||i.ChangeType = SvnStatusLineChangeType.ItemMissing)
+                |> Seq.map (fun i -> i.ChangeType = SvnStatusLineChangeType.NotInSourceControl, i.FilePath) do
+            let f =
+                if (toAdd) then SvnProcess.add else SvnProcess.delete
+
+            do! f svnPath folder.FullPath item
+
+        // Get commit message
+        let normalizedChanges =
+            items
+                |> Seq.filter 
+                    (fun t ->
+                        t.ChangeType = SvnStatusLineChangeType.Added || 
+                        t.ChangeType = SvnStatusLineChangeType.Deleted ||
+                        t.ChangeType = SvnStatusLineChangeType.ItemMissing || 
+                        t.ChangeType = SvnStatusLineChangeType.Modified || 
+                        t.ChangeType = SvnStatusLineChangeType.NotInSourceControl || 
+                        t.ChangeType = SvnStatusLineChangeType.Replaced)
+                |> Seq.map
+                    (fun t ->
+                        {
+                            ChangeType = 
+                                match t.ChangeType with
+                                | SvnStatusLineChangeType.Added -> CommitMessageChangeType.Added
+                                | SvnStatusLineChangeType.Deleted -> CommitMessageChangeType.Deleted
+                                | SvnStatusLineChangeType.ItemMissing ->  CommitMessageChangeType.Deleted
+                                | SvnStatusLineChangeType.Modified ->  CommitMessageChangeType.Updated
+                                | SvnStatusLineChangeType.NotInSourceControl -> CommitMessageChangeType.Added
+                                | SvnStatusLineChangeType.Replaced -> CommitMessageChangeType.Updated
+                                | _ -> failwith "SVN got a status that was already filtered"
+                            FilePath = t.FilePath
+                            FilePathRename = ""
+                        })
+        let commitMessage =
+            x.GenerateCommitMessage normalizedChanges
+        
+        // Do the commit
+        do! SvnProcess.commit svnPath folder.FullPath commitMessage
     }    
     
     override x.StartSyncDown () = 

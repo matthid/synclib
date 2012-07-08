@@ -27,6 +27,7 @@ let createManager (backendManager:IBackendManager) name folder server =
         |> Event.add 
             (fun conf -> 
                 match conf with
+                | SyncConflict.MergeConflict(file) -> printfn "Solving conflict for file %s" file
                 | SyncConflict.Unknown(s) -> printfn "Unknown Conflict: %s" s)
 
     manager.SyncError

@@ -22,6 +22,7 @@ type ManagedFolderInfo(name:string, path:string, remote:string, announcementUrl:
 
 /// The Type of Conflict that occured while syncing
 type SyncConflict = 
+    | MergeConflict of string
     | Unknown of string
 
 /// The state of the syncing process

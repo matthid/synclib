@@ -14,13 +14,10 @@ open System.Threading
 
 module Seq =
     let tryTake (n : int) (s : _ seq) =
-        let e = s.GetEnumerator ()
-        let i = ref 0
-        seq {
-            while e.MoveNext () && !i < n do
-                i := !i + 1
-                yield e.Current
-        }
+        s 
+            |> Seq.mapi (fun i t -> i < n, t)
+            |> Seq.takeWhile (fun (shouldTake, t) -> shouldTake)
+            |> Seq.map (fun (shouldTake, t) -> t)
         
 type ITracer = 
     abstract member log : Diagnostics.TraceEventType ->Printf.StringFormat<'a, unit> -> 'a
@@ -53,7 +50,7 @@ module AsyncTrace =
                     list 
                         |> Seq.filter (fun f -> f.Info.IsSome)
                             
-                let mutable data = None
+                let mutable data: 'Info option = Option.None
                 for dataItem in dataItems do
                     let info = dataItem.Info
                     if (info.IsSome) then
@@ -72,7 +69,7 @@ module AsyncTrace =
         let internalList = new TraceList<'Info>()
 
         let buildTrace async = 
-            let b = new AsyncTrace<'Info, 'Y>(None, async)
+            let b = new AsyncTrace<'Info, 'Y>(Option.None, async)
             (b :> IAsyncTrace<'Info>).Capture internalList
             b
             
@@ -95,7 +92,7 @@ module AsyncTrace =
             buildTrace (
                 async {
                     let! d = async.Return(t)
-                    return None, d
+                    return Option.None, d
                 })
 
         let returnFrom (t:AsyncTrace<'Info, _>) = 
@@ -124,7 +121,7 @@ module AsyncTrace =
                                     do! (work t).Async |> Async.Ignore
                                     return ()
                                 })) 
-                    return None, t } )
+                    return  Option.None, t } )
 
         let tryFinally (item:AsyncTrace<'Info,_>) f = 
             (item:> IAsyncTrace<'Info>).Capture internalList
@@ -147,14 +144,14 @@ module AsyncTrace =
                                 do! work.Async |> Async.Ignore
                                 return ()
                             }))
-                    return None, ()
+                    return  Option.None, ()
                 })
 
         let zeroComp () = 
             buildTrace 
                 (async {
                     let! t = async.Zero()
-                    return None, t
+                    return  Option.None, t
                 })
 
 
@@ -181,16 +178,16 @@ module AsyncTrace =
             let! a = b // Small hack to get connected
             return 
                 match (b:>IAsyncTrace<_>).Info with
-                | None -> 
+                |  Option.None -> 
                     failwith "Please set the info value via builder"
-                | Some v -> v : 'a 
+                |  Option.Some v -> v : 'a 
         } 
 
     let convertFromAsync asy = 
-        new AsyncTrace<_,_>(None, 
+        new AsyncTrace<_,_>( Option.None, 
             async {
                 let! d = asy
-                return None, d
+                return  Option.None, d
             })
     let convertToAsync (traceAsy:AsyncTrace<_,_>) = 
         async {
@@ -226,6 +223,16 @@ module AsyncTrace =
                 Trace.CorrelationManager.ActivityId <- oldId
         interface ITracer with 
             member x.log ty fmt = Printf.kprintf (logHelper ty) fmt  
+
+    let DefaultTracer state = 
+        new DefaultStateTracer(state) :> ITracer
+
+    let SetTracer tracer (traceAsy:AsyncTrace<_,_>) = 
+        traceAsy.SetInfo tracer
+        traceAsy |> convertToAsync
+
+    let SetDefaultTracer state (traceAsy:AsyncTrace<_,_>) = 
+        traceAsy |> SetTracer (DefaultTracer state)
 
 module Event =
     let guard f (e:IEvent<'Del, 'Args>) = 
@@ -265,3 +272,36 @@ module Observable =
         member x.Subscribe(observer) = 
           let rm = e.Subscribe(observer) in f(); rm }
 
+module MatchHelper = 
+    /// Allowed to Match against a substring
+    let (|Contains|_|) (contain:string) (data:string) =   
+        if (data.Contains(contain)) then Some() else None
+
+    let (|ContainsAll|_|) (containings:string list) (data:string) = 
+        if containings |> List.exists (fun contain -> not <| data.Contains(contain)) then
+            None
+        else Some()
+
+    let (|StartsWith|_|) (start:string) (data:string) =   
+        if (data.StartsWith(start)) then Some(data.Substring(start.Length)) else None
+
+    let (|EndsWith|_|) (endString:string) (data:string) =   
+        if (data.EndsWith(endString)) then Some(data.Substring(0, data.Length - endString.Length)) else None
+
+    let (|Equals|_|) x y = if x = y then Some() else None
+
+    let (|Integer|_|) (str: string) =
+       let mutable intvalue = 0
+       if System.Int32.TryParse(str, &intvalue) then Some(intvalue)
+       else None
+
+    let (|Float|_|) (str: string) =
+       let mutable floatvalue = 0.0
+       if System.Double.TryParse(str, &floatvalue) then Some(floatvalue)
+       else None
+    
+    let (|ParseRegex|_|) regex str =
+        let m = System.Text.RegularExpressions.Regex(regex).Match(str)
+        if m.Success
+        then Some (List.tail [ for x in m.Groups -> x.Value ])
+        else None
