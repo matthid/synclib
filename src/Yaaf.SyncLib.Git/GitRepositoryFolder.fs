@@ -181,7 +181,6 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
             do! GitProcess.RunGitRemoteAsync git folder.FullPath (RemoteType.Add(remoteName, folder.Remote)) |> AsyncTrace.Ignore
             
         isInit <- true
-        return ()
     }
 
     
@@ -264,8 +263,6 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                     syncConflict.Trigger (SyncConflict.Unknown errorMsg)
                     x.RequestSyncDown() // We handle conflicts there
                     x.RequestSyncUp()
-            
-        return ()
     }
 
     override x.StartSyncDown () = 
