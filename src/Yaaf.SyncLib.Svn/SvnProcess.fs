@@ -104,6 +104,8 @@ type SvnInfo = {
     Kind : string
     /// normal
     Schedule : string
+    /// empty
+    Depth : string
     /// blub@gmail.com
     LastAuthor : string
     /// 26
@@ -113,6 +115,8 @@ type SvnInfo = {
     }
 
 type SvnUpdateType =
+    /// ( ) None (if only Properties are updated)
+    | None
     /// (A) Added 
     | Added
     /// (D) Deleted
@@ -127,8 +131,8 @@ type SvnUpdateType =
 type SvnUpdateInfo = 
     /// Updated to revision 32.
     | FinishedRevision of int
-    /// A  newdir/launch.c
-    | FinishedFile of SvnUpdateType * string
+    /// A  newdir/launch.c (UpdateType, PropertyUpdateType, Filename
+    | FinishedFile of SvnUpdateType * SvnUpdateType * string
 module HandleSvnData = 
     /// this will will parse a line given by "svn status --show-updates"
     let parseStatusLine (l:string) = 
@@ -148,31 +152,31 @@ module HandleSvnData =
             | '?' -> NotInSourceControl
             | '!' -> ItemMissing
             | '~' -> MissVersioned
-            | _ -> failwith (sprintf "Unknown svn changetype %c (first status column)" l.[0])
+            | _ -> failwith (sprintf "Unknown svn changetype %c (first status column), line: %s" l.[0] l)
         Properties = 
             match l.[1] with
             | ' ' -> SvnStatusProperties.None
             | 'M' -> SvnStatusProperties.PropModified
             | 'C' -> SvnStatusProperties.PropConflict
-            | _ -> failwith (sprintf "Unknown svn property %c (secound status column)" l.[1])
+            | _ -> failwith (sprintf "Unknown svn property %c (secound status column), line: %s" l.[1] l)
 
         IsLocked = 
             match l.[2] with
             | ' ' -> false
             | 'L' -> true
-            | _ -> failwith (sprintf "Unknown svn property %c (third status column)" l.[2])
+            | _ -> failwith (sprintf "Unknown svn property %c (third status column), line: %s" l.[2] l)
 
         ScheduledForAddingWithHistory =
             match l.[3] with
             | ' ' -> false
             | '+' -> true
-            | _ -> failwith (sprintf "Unknown svn property %c (fourth status column)" l.[3])
+            | _ -> failwith (sprintf "Unknown svn property %c (fourth status column), line: %s" l.[3] l)
             
         SwitchedRelative =
             match l.[4] with
             | ' ' -> false
             | 'S' -> true
-            | _ -> failwith (sprintf "Unknown svn property %c (fifth status column)" l.[4])
+            | _ -> failwith (sprintf "Unknown svn property %c (fifth status column), line: %s" l.[4] l)
 
         LockInformation = 
             match l.[5] with
@@ -181,18 +185,18 @@ module HandleSvnData =
             | 'O' -> SvnStatusLockInformation.LockedByOtherUser
             | 'T' -> SvnStatusLockInformation.LockStolen
             | 'B' -> SvnStatusLockInformation.LockInvalid
-            | _ -> failwith (sprintf "Unknown svn property %c (sixth status column)" l.[5])
+            | _ -> failwith (sprintf "Unknown svn property %c (sixth status column), line: %s" l.[5] l)
            
         IsTreeConflict = 
             match l.[6] with
             | ' ' -> false
             | 'C' -> true
-            | _ -> failwith (sprintf "Unknown svn property %c (seventh status column)" l.[6])
+            | _ -> failwith (sprintf "Unknown svn property %c (seventh status column), line: %s" l.[6] l)
         IsOutOfDate = 
             match l.[8] with
             | ' ' -> false
             | '*' -> true
-            | _ -> failwith (sprintf "Unknown svn property %c (ninth status column)" l.[8])
+            | _ -> failwith (sprintf "Unknown svn property %c (ninth status column), line: %s" l.[8] l)
         Revision = 
             match System.Int32.TryParse(restParams.[0]) with
             | true, value -> Some value
@@ -205,15 +209,90 @@ module HandleSvnData =
                 FinishedRevision(System.Int32.Parse(rest.Substring(0, rest.Length-1)))
             | _ ->
                 let filePath = line.Substring(2).Trim()
-                let svnType = 
+                let svnUpdateType = 
                     match line.[0] with
+                    | ' ' -> SvnUpdateType.None
                     | 'A' -> SvnUpdateType.Added
                     | 'C' -> SvnUpdateType.Conflicting
                     | 'D' -> SvnUpdateType.Deleted
                     | 'G' -> SvnUpdateType.Merged
                     | 'U' -> SvnUpdateType.Updated
-                    | _ -> failwith (sprintf "Unknown SVN Update type: \"%c\"" line.[0])
-                FinishedFile (svnType, filePath)
+                    | _ -> failwith (sprintf "Unknown SVN Update type: \"%c\", line: %s" line.[0] line)
+                let svnUpdatePropertyType = 
+                    match line.[1] with
+                    | ' ' -> SvnUpdateType.None
+                    | 'A' -> SvnUpdateType.Added
+                    | 'C' -> SvnUpdateType.Conflicting
+                    | 'D' -> SvnUpdateType.Deleted
+                    | 'G' -> SvnUpdateType.Merged
+                    | 'U' -> SvnUpdateType.Updated
+                    | _ -> failwith (sprintf "Unknown SVN Update type: \"%c\", line: %s" line.[1] line)
+                FinishedFile (svnUpdateType, svnUpdatePropertyType, filePath)
+
+    let parseInfoDataLine (defaults:System.Collections.Generic.IDictionary<_,_>) state line =
+        let rec handleLineRec (i,list) =
+            let currentLine = 
+                match i with
+                | 1 -> "Path: " // .
+                | 2 -> "Name: " //readme.doc
+                | 3 -> "Working Copy Root Path: " // /home/me/folder
+                | 4 -> "URL: " // https://server.com/svn/root/trunk/Blatt0
+                | 5 -> "Repository Root: " // https://server.com/svn/root
+                | 6 -> "Repository UUID: " // 454b96c5-00da-4618-90ec-f94890f0cf31
+                | 7 -> "Revision: " // 123
+                | 8 -> "Node Kind: " // directory
+                | 9 -> "Schedule: " // normal
+                | 10 -> "Depth: " // normal
+                | 11 -> "Last Changed Author: " // blub@gmail.com
+                | 12 -> "Last Changed Rev: " // 26
+                | 13 -> "Last Changed Date: " // 2012-05-06 17:02:39 +0200 (So, 06 Mai 2012)
+                | _ -> failwith (sprintf "SVN: too much info lines \"%s\"" line)
+            match line with
+            | StartsWith currentLine rest -> 
+                (i+1, rest :: list)
+            | _ ->
+                match i with
+                | 2 ->
+                    // Get the name from the Path.
+                    match list with
+                    | h :: t -> handleLineRec (i+1, Path.GetDirectoryName h :: list)
+                    | _ -> failwith (sprintf "expected that we did parse the path (Line \"%s\")" line)
+                | _ ->
+                    if not (defaults.ContainsKey(i)) then 
+                        failwith (sprintf "Unknown SVN Line %s, expected %s" line currentLine)
+                    handleLineRec (i+1, defaults.[i] :: list)
+        handleLineRec state
+
+    let parseInfoData infoData = 
+        let defaults =
+            new System.Collections.Generic.Dictionary<_,_>()
+        defaults.[10] <- "infinite" // default for depth
+        defaults.[11] <- "None" // Last changed author
+        let count, output =
+            infoData 
+                |> Seq.fold 
+                    (parseInfoDataLine defaults)
+                    (1, [])
+
+        if count <> 14 then failwith (sprintf "Invalid number of info lines!")
+                
+        match output |> List.rev with
+        | [path; name; workingDirRoot; url; repRoot; repUUID; rev; kind; schedule; depth; lastAuthor; lastRev; lastChanged ] -> 
+            {
+                Path = path
+                WorkingDirRoot = workingDirRoot
+                Url = url
+                RepositoryRoot = repRoot
+                RepositoryUUID = repUUID
+                Revision = System.Int32.Parse rev
+                Kind = kind
+                Schedule = schedule
+                Depth = depth
+                LastAuthor = lastAuthor
+                LastRevision = System.Int32.Parse lastRev
+                LastChanged = System.DateTime.Parse(lastChanged.Substring(0,19))
+            }
+        | _ -> failwith "invalid svn info data received!"
 
 exception SvnNotWorkingDir
 module SvnProcess = 
@@ -223,13 +302,25 @@ module SvnProcess =
         | ContainsAll ["svn: E155007: "; " is not a working copy"] -> raise SvnNotWorkingDir
         | _ -> Option.None
     let checkout svn local remote = asyncTrace() {
-        let svnProc = new ToolProcess(svn, local, sprintf "checkout \"%s\" ." remote)
+        let svnProc = new ToolProcess(svn, local, sprintf "checkout -r 0 \"%s\" ." remote)
         do! svnProc.RunAsync() }
-
+        
     let resolved svn local file = asyncTrace() {
         let svnProc = new ToolProcess(svn, local, sprintf "resolved \"%s\"" file)
         do! svnProc.RunAsync() }
 
+    let add svn local file = asyncTrace() {
+        let svnProc = new ToolProcess(svn, local, sprintf "add \"%s\"" file)
+        do! svnProc.RunAsync() }
+        
+    let delete svn local file = asyncTrace() {
+        let svnProc = new ToolProcess(svn, local, sprintf "remove \"%s\"" file)
+        do! svnProc.RunAsync() }
+
+    let commit svn local message = asyncTrace() {
+        let svnProc = new ToolProcess(svn, local, sprintf "commit -m \"%s\"" message)
+        do! svnProc.RunAsync() }
+        
     let status svn local = asyncTrace() {
         let svnProc = new ToolProcess(svn, local, sprintf "status --show-updates")
         let! output, error = 
@@ -251,40 +342,12 @@ module SvnProcess =
                 (fun line ->
                     match line with
                     | Equals "" -> Option.None
-                    | _ -> 
-                        Some <|
-                            match line with
-                            | StartsWith "Path: " rest -> rest // .
-                            | StartsWith "Working Copy Root Path: " rest -> rest // /home/me/folder
-                            | StartsWith "URL: " rest -> rest // https://server.com/svn/root/trunk/Blatt0
-                            | StartsWith "Repository Root: " rest -> rest // https://server.com/svn/root
-                            | StartsWith "Repository UUID: " rest -> rest // 454b96c5-00da-4618-90ec-f94890f0cf31
-                            | StartsWith "Revision: " rest -> rest // 123
-                            | StartsWith "Node Kind: " rest -> rest // directory
-                            | StartsWith "Schedule: " rest -> rest // normal
-                            | StartsWith "Last Changed Author: " rest -> rest // blub@gmail.com
-                            | StartsWith "Last Changed Rev: " rest -> rest // 26
-                            | StartsWith "Last Changed Date: " rest -> rest // 2012-05-06 17:02:39 +0200 (So, 06 Mai 2012)
-                            | _ -> failwith (sprintf "SVN: unknown info line \"%s\"" line)),
+                    | _ -> Some <| line),
                 svnErrorFun)
         
+
         let outputData = 
-            match output |> Seq.toList with
-            | [path; workingDirRoot; url; repRoot; repUUID; rev; kind; schedule; lastAuthor; lastRev; lastChanged ] -> 
-                {
-                    Path = path
-                    WorkingDirRoot = workingDirRoot
-                    Url = url
-                    RepositoryRoot = repRoot
-                    RepositoryUUID = repUUID
-                    Revision = System.Int32.Parse rev
-                    Kind = kind
-                    Schedule = schedule
-                    LastAuthor = lastAuthor
-                    LastRevision = System.Int32.Parse lastRev
-                    LastChanged = System.DateTime.Parse(lastChanged.Substring(0,19))
-                }
-            | _ -> failwith "invalid svn info data received!"
+            HandleSvnData.parseInfoData output
 
         return outputData
     }
@@ -293,8 +356,11 @@ module SvnProcess =
         let svnProc = new ToolProcess(svn, local, sprintf "update")
         do! svnProc.RunWithErrorOutputAsync(
                 (fun line ->
-                    if (line <> "") then                           
-                        line |> HandleSvnData.parseUpdateLine |> receivedLine
+                    if (line <> "") then  
+                        match line with 
+                        | StartsWith "Updating " rest -> () // "'.':"    
+                        | StartsWith "At revision " rest -> () // "133."    
+                        | _ -> line |> HandleSvnData.parseUpdateLine |> receivedLine
                     Option.None),
                 svnErrorFun)
             |> AsyncTrace.Ignore
