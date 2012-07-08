@@ -7,6 +7,7 @@ namespace Yaaf.SyncLib.Git
 open Yaaf.SyncLib
 open Yaaf.SyncLib.Helpers
 open Yaaf.SyncLib.Helpers.AsyncTrace
+open Yaaf.SyncLib.Helpers.MatchHelper
 open Yaaf.SyncLib.Git
 
 open System.IO
@@ -183,8 +184,6 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
         return ()
     }
 
-    let (|Contains|_|) (contain:string) (data:string) =   
-        if (data.Contains(contain)) then Some(()) else None
     
     let repairMasterBranch () = 
         File.WriteAllText(
