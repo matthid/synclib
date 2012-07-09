@@ -21,10 +21,21 @@ type BackendType =
     | Git
     | Svn
 
+
 module Scripting = 
     
+    module private InterOp =
+        [<System.Runtime.InteropServices.DllImport("user32.dll")>]
+        extern bool ShowWindow(nativeint hWnd, int flags)
+
+        let HideProcWindow(proc:System.Diagnostics.Process) = 
+            ShowWindow(proc.MainWindowHandle, 0) |> ignore
+
     let gitBackendManager = new GitBackendManager() :> IBackendManager
     let svnBackendManager = new SvnBackendManager() :> IBackendManager
+
+    let HideFsi () = 
+        InterOp.HideProcWindow (System.Diagnostics.Process.GetCurrentProcess())
 
     let CustomManager (backendManager:IBackendManager) info = 
         info, backendManager.CreateFolderManager info
@@ -89,3 +100,59 @@ module Scripting =
         Application.Run()
 
         for info, manager in managers do manager.StopService()
+
+    // This is maybe a solution for future version to make logging possible via script file
+    // For now just copy the fsi.exe and create a fsi.exe.config
+//    [<AbstractClass>]
+//    type AppConfig() =
+//        static member Change( path) =
+//            new ChangeAppConfig(path)
+//        abstract member Dispose : unit -> unit
+//        interface IDisposable with
+//            member x.Dispose() = x.Dispose()
+//
+//    and ChangeAppConfig(path:string) =   
+//        inherit AppConfig()
+//
+//        let mutable disposedValue = false
+//
+//        
+//        let ResetConfigMechanism() =
+//            let managerType = typedefof<System.Configuration.ConfigurationManager>
+//            let bindingFlags = System.Reflection.BindingFlags.NonPublic |||
+//                               System.Reflection.BindingFlags.Static
+//            managerType
+//                .GetField("s_initState",bindingFlags)
+//                .SetValue(null, 0);
+//
+//            managerType
+//                .GetField("s_configSystem", bindingFlags)
+//                .SetValue(null, null);
+//
+//            (managerType
+//                .Assembly.GetTypes()
+//                |> Seq.filter 
+//                    (fun x -> 
+//                        x.FullName = "System.Configuration.ClientConfigPaths")
+//                |> Seq.head)
+//                .GetField("s_current", bindingFlags)
+//                .SetValue(null, null);
+//
+//        do 
+//            AppDomain.CurrentDomain.SetData("APP_CONFIG_FILE", path)
+//            ResetConfigMechanism()
+//
+//
+//        
+//        override x.Dispose() =
+//            if not (disposedValue) then
+//                AppDomain.CurrentDomain.SetData("APP_CONFIG_FILE", ChangeAppConfig.oldConfig)
+//                ResetConfigMechanism()
+//                disposedValue <- true
+//            GC.SuppressFinalize(x)
+//
+//        static member private oldConfig =
+//            AppDomain.CurrentDomain.GetData("APP_CONFIG_FILE").ToString()
+    
+
+

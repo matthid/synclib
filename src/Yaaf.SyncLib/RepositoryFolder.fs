@@ -43,9 +43,10 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
     /// This will ensure that only one sync process is running at any time
     let processor = 
         MailboxProcessor<_>.Start(fun inbox -> 
+            let traceSource = MySource "Yaaf.SyncLib.Processing" folder.Name
             let rec loop i =
-                let tracer = new DefaultStateTracer(sprintf "Processing (%d): " i) :> ITracer
                 async {
+                    use tracer = AsyncTrace.DefaultTracer traceSource (i.ToString())
                     try
                         // Get All messages (or wait for the first if non available)
                         let! allmsgs = 
@@ -68,7 +69,7 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
                                         doTask SyncState.SyncUp (fun () -> x.StartSyncUp())
                                     | DoSyncDown ->
                                         doTask SyncState.SyncDown (fun () -> x.StartSyncDown())
-                                do! work |> AsyncTrace.SetTracer tracer 
+                                do! work |> AsyncTrace.SetTracer tracer
                     with 
                         | exn -> 
                             tracer.logErr "Error in Processing: %s" (exn.ToString())

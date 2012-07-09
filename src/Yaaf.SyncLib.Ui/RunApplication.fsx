@@ -11,8 +11,7 @@ open Yaaf.SyncLib
 open Yaaf.SyncLib.Ui
 open Yaaf.SyncLib.Ui.Scripting
 
-// Add some logging (just leave this line if you don't know what it does
-Helpers.AsyncTrace.globalTrace.Listeners.Add(new System.Diagnostics.XmlWriterTraceListener("log.svclog"))
+HideFsi()
 
 // Your startup logic / your folders
 let myManagers = [

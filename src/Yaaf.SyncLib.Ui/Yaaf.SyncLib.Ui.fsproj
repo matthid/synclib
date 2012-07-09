@@ -59,6 +59,7 @@
       <HintPath>C:\Program Files (x86)\GtkSharp\2.12\lib\gtk-sharp-2.0\pango-sharp.dll</HintPath>
     </Reference>
     <Reference Include="System" />
+    <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
     <Reference Include="System.Numerics" />
   </ItemGroup>
@@ -68,6 +69,9 @@
     <Compile Include="GtkNotification.fs" />
     <Compile Include="Scripting.fs" />
     <None Include="RunApplication.fsx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="StartUi.cmd">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
@@ -91,7 +95,8 @@
   <Import Project="$(MSBuildExtensionsPath32)\FSharp\1.0\Microsoft.FSharp.Targets" Condition="!Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
   <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft F#\v4.0\Microsoft.FSharp.Targets" Condition=" Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
   <PropertyGroup>
-    <PostBuildEvent>move "$(ProjectDir)$(OutDir)RunApplication.fsx" "$(ProjectDir)$(OutDir)..\RunApplication.fsx"</PostBuildEvent>
+    <PostBuildEvent>move "$(ProjectDir)$(OutDir)RunApplication.fsx" "$(ProjectDir)$(OutDir)..\RunApplication.fsx"
+move "$(ProjectDir)$(OutDir)StartUi.cmd" "$(ProjectDir)$(OutDir)..\StartUi.cmd"</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
 	     Other similar extension points exist, see Microsoft.Common.targets.

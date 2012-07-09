@@ -12,7 +12,7 @@ open Yaaf.SyncLib.Helpers
 open Yaaf.SyncLib.Helpers.AsyncTrace
 
 let myManagers = [
-        //GitTesting.createManager "Documents" "D:\\Documents" "git@localdevserver:mydata.git" 
+        GitTesting.createManager "Documents" "D:\\Documents" "git@localdevserver:mydata.git" 
         SvnTesting.createManager "ppp" "D:\\Test2" "https://subversion.assembla.com/svn/parallel-proggn" 
     ]
 
