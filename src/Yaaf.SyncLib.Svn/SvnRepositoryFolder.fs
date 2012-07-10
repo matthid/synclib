@@ -167,7 +167,7 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
             let f =
                 if (toAdd) then SvnProcess.add else SvnProcess.delete
 
-            do! f svnPath |> invokeSvn
+            do! f item |> invokeSvn
 
         // Get commit message
         let normalizedChanges =
