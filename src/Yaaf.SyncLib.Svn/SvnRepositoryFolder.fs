@@ -24,7 +24,7 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
     /// Indicates wheter this svn rep is initialized (ie requires special checks at startup)
     let mutable isInit = false
     let svnPath = folder.Additional.["svnpath"]
-
+    let invokeSvn f = f svnPath folder.FullPath
     do
         // Start watching
         localWatcher.Changed
@@ -47,23 +47,23 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
         t.logInfo "Init SVN Repro %s" folder.Name
         // Check if repro is initialized (ie is a git repro)
         try
-            do! SvnProcess.status svnPath (folder.FullPath) |> AsyncTrace.Ignore
+            do! SvnProcess.status |> invokeSvn |> AsyncTrace.Ignore
         with
         | SvnNotWorkingDir ->
             t.logWarn "%s is no SVN Repro so init it" folder.Name
-            do! SvnProcess.checkout svnPath folder.FullPath folder.Remote
+            do! SvnProcess.checkout folder.Remote |> invokeSvn
                 
                 
         
         // Check whether the remote url matches
-        let! svnInfo = SvnProcess.info svnPath (folder.FullPath)
+        let! svnInfo = SvnProcess.info |> invokeSvn
         if (svnInfo.Url <> folder.Remote) then failwith (invalidOp "SVN Url does not match!")
 
         isInit <- true
     }
 
     let resolveConflicts () = asyncTrace() {
-        let! items = SvnProcess.status svnPath (folder.FullPath)
+        let! items = SvnProcess.status |> invokeSvn
         let conflicting = 
             items
                 |> Seq.filter (fun item -> item.ChangeType = SvnStatusLineChangeType.ContentConflict)
@@ -104,7 +104,7 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
                 true)
 
             // Mark as solved 
-            do! SvnProcess.resolved svnPath folder.FullPath filePath
+            do! SvnProcess.resolved filePath |> invokeSvn
     }
 
     let syncDown() = asyncTrace() {
@@ -127,8 +127,6 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
             let finishedFileCount = ref 0
             let conflictFile = ref false
             do! SvnProcess.update 
-                    svnPath 
-                    folder.FullPath
                     (fun updateFinished ->
                         match updateFinished with
                         | FinishedFile(updateType, propType, file) ->
@@ -140,6 +138,7 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
                             finishedFileCount := !finishedFileCount + 1
                             progressChanged.Trigger (0.95 * float (!finishedFileCount) / updateItemsCount)
                         | _ -> ())
+                    |> invokeSvn
 
             // Conflict resolution
             if (!conflictFile) then
@@ -151,7 +150,7 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
 
     let syncUp() = asyncTrace() {
         // get status
-        let! items = SvnProcess.status svnPath (folder.FullPath)
+        let! items = SvnProcess.status |> invokeSvn
 
         // add all changes to svn
         for (toAdd, item) in items
@@ -162,7 +161,7 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
             let f =
                 if (toAdd) then SvnProcess.add else SvnProcess.delete
 
-            do! f svnPath folder.FullPath item
+            do! f svnPath |> invokeSvn
 
         // Get commit message
         let normalizedChanges =
@@ -194,7 +193,7 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
             x.GenerateCommitMessage normalizedChanges
         
         // Do the commit
-        do! SvnProcess.commit svnPath folder.FullPath commitMessage
+        do! SvnProcess.commit commitMessage |> invokeSvn
     }    
     
     override x.StartSyncDown () = 
