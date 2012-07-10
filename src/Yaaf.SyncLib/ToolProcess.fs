@@ -72,9 +72,6 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
             toolProcess.ErrorDataReceived 
                 |> Event.add (fun data ->
                     if (data.Data <> null) then
-                        #if DEBUG
-                        printfn "Error Line Received: %s" data.Data
-                        #endif
                         t.logVerb "Received Error Line %s" data.Data
                         (!errorBuilder).AppendLine(data.Data) |> ignore)
             
@@ -82,9 +79,6 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
             toolProcess.OutputDataReceived 
                 |> Event.add (fun data ->
                     if (data.Data <> null) then
-                        #if DEBUG
-                        printfn "Line Received: %s" data.Data
-                        #endif
                         t.logVerb "Received Line %s" data.Data
                         (!outputBuilder).AppendLine(data.Data) |> ignore)
 
