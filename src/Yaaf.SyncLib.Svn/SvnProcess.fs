@@ -293,6 +293,7 @@ module HandleSvnData =
         | _ -> failwith "invalid svn info data received!"
 
 exception SvnNotWorkingDir
+exception SvnAlreadyLocked of exn
 module SvnProcess = 
     let svnErrorFun error = 
         match error with
@@ -301,13 +302,19 @@ module SvnProcess =
         //| ContainsAll ["svn: E155007: "; " is not a working copy"] -> raise SvnNotWorkingDir
         | _ -> Option.None
 
-    let runSvn rfun param svn local   = asyncTrace() {
+    let runSvn rfun param svn local = asyncTrace() {
         let svnProc = new ToolProcess(svn, local, param)
-        return! rfun(svnProc) }
+        try
+            return! rfun(svnProc) 
+        with
+            | :? ToolProcessFailed as d when d.Data3.Contains("E155004") ->
+                // Help the type inference
+                return raise (SvnAlreadyLocked(d))
+        }
 
     let runSvnSimple = runSvn (fun proc -> proc.RunAsync())
 
-    let checkout remote = runSvnSimple  (sprintf "checkout -r 0 \"%s\" ." remote)
+    let checkout remote = runSvnSimple (sprintf "checkout -r 0 \"%s\" ." remote)
         
     let resolved file = runSvnSimple (sprintf "resolved \"%s\"" file)
 
@@ -316,6 +323,8 @@ module SvnProcess =
     let delete file = runSvnSimple (sprintf "remove \"%s\"" file)
 
     let commit message = runSvnSimple (sprintf "commit -m \"%s\"" message)
+
+    let cleanup = runSvnSimple (sprintf "cleanup")
         
     let status = 
         runSvn 
@@ -332,7 +341,7 @@ module SvnProcess =
                 return o })
             (sprintf "status --show-updates")
 
-    let info svn local = 
+    let info = 
         runSvn 
             (fun svnProc -> asyncTrace() {
                 let! o, e =

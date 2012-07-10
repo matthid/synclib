@@ -115,35 +115,41 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
 
             t.logInfo "Starting SVN Syncdown of %s" folder.Name
             /// counting the items to update
-            let! items = SvnProcess.status svnPath (folder.FullPath)
+            let! items = SvnProcess.status |> invokeSvn
             let updateItemsCount =
                 let t =
                     items
                         |> Seq.filter (fun item -> item.IsOutOfDate)
                         |> Seq.length
                 if t = 0 then 1.0 else float t
+            try
+                // Starting the update
+                let finishedFileCount = ref 0
+                let conflictFile = ref false
+                do! SvnProcess.update 
+                        (fun updateFinished ->
+                            match updateFinished with
+                            | FinishedFile(updateType, propType, file) ->
+                                match updateType with
+                                | SvnUpdateType.Conflicting -> 
+                                    syncConflict.Trigger (SyncConflict.Unknown (sprintf "file %s is conflicting" file))
+                                    conflictFile := true
+                                | _ -> ()
+                                finishedFileCount := !finishedFileCount + 1
+                                progressChanged.Trigger (0.95 * float (!finishedFileCount) / updateItemsCount)
+                            | _ -> ())
+                        |> invokeSvn
 
-            // Starting the update
-            let finishedFileCount = ref 0
-            let conflictFile = ref false
-            do! SvnProcess.update 
-                    (fun updateFinished ->
-                        match updateFinished with
-                        | FinishedFile(updateType, propType, file) ->
-                            match updateType with
-                            | SvnUpdateType.Conflicting -> 
-                                syncConflict.Trigger (SyncConflict.Unknown (sprintf "file %s is conflicting" file))
-                                conflictFile := true
-                            | _ -> ()
-                            finishedFileCount := !finishedFileCount + 1
-                            progressChanged.Trigger (0.95 * float (!finishedFileCount) / updateItemsCount)
-                        | _ -> ())
-                    |> invokeSvn
-
-            // Conflict resolution
-            if (!conflictFile) then
-                // Resolve conflict
-                do! resolveConflicts()
+                // Conflict resolution
+                if (!conflictFile) then
+                    // Resolve conflict
+                    do! resolveConflicts()
+            with
+                | SvnAlreadyLocked(ToolProcessFailed(code, cmd, o, e)) ->
+                    t.logErr "Detected a SVN Workspace Lock (%d, %s, %s, %s)" code cmd o e
+                    t.logInfo "Trying to resolve the lock"
+                    do! SvnProcess.cleanup |> invokeSvn
+                    x.RequestSyncDown() // Try again
         finally 
             progressChanged.Trigger 1.0
     }
