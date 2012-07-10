@@ -4,10 +4,9 @@
 // ----------------------------------------------------------------------------
 namespace Yaaf.SyncLib.Svn
 
+open Yaaf.AsyncTrace
+
 open Yaaf.SyncLib
-open Yaaf.SyncLib.Helpers
-open Yaaf.SyncLib.Helpers.AsyncTrace
-open Yaaf.SyncLib.Helpers.MatchHelper
 open Yaaf.SyncLib.Svn
 
 open System.IO
@@ -44,7 +43,7 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
                 (fun l -> x.RequestSyncDown())
 
     let init() = asyncTrace() {
-        let! (t:ITracer) = AsyncTrace.traceInfo()
+        let! (t:ITracer) = traceInfo()
         t.logInfo "Init SVN Repro %s" folder.Name
         // Check if repro is initialized (ie is a git repro)
         try
@@ -109,7 +108,7 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
     }
 
     let syncDown() = asyncTrace() {
-        let! (t:ITracer) = AsyncTrace.traceInfo()
+        let! (t:ITracer) = traceInfo()
         progressChanged.Trigger 0.0
         try
             if not isInit then do! init()

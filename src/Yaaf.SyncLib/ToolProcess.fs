@@ -5,8 +5,7 @@
 namespace Yaaf.SyncLib
 
 open System.Diagnostics
-open Yaaf.SyncLib.Helpers
-open Yaaf.SyncLib.Helpers.AsyncTrace
+open Yaaf.AsyncTrace
 
 /// Will be thrown if the process doesn't end with exitcode 0.
 /// The Data contained is a tuple of exitCode, commandLine, output, errorOutput.
@@ -66,7 +65,7 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
     member x.Kill() = toolProcess.Kill()
     member x.RunAsync() = 
         asyncTrace() {
-            let! (t:ITracer) = AsyncTrace.traceInfo()
+            let! (t:ITracer) = traceInfo()
 
             // Collect error stream
             let errorBuilder = ref (new System.Text.StringBuilder())
@@ -100,7 +99,7 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
                         (fun () ->
                             toolProcess.EnableRaisingEvents <- true)
                     |> Async.AwaitEvent
-                    |> AsyncTrace.convertFromAsync
+                    |> AsyncTrace.FromAsync
                     
             toolProcess.WaitForExit()
             

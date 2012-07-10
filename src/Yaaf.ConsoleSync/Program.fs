@@ -8,8 +8,6 @@ open SvnTesting
 
 open Yaaf.SyncLib
 open Yaaf.SyncLib.Svn
-open Yaaf.SyncLib.Helpers
-open Yaaf.SyncLib.Helpers.AsyncTrace
 
 let myManagers = [
         GitTesting.createManager "Documents" "D:\\Documents" "git@localdevserver:mydata.git" 

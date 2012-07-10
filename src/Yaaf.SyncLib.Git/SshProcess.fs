@@ -7,8 +7,7 @@ namespace Yaaf.SyncLib.Git
 open System.Diagnostics
 open System.IO
 open Yaaf.SyncLib
-open Yaaf.SyncLib.Helpers
-open Yaaf.SyncLib.Helpers.AsyncTrace
+open Yaaf.AsyncTrace
 
 exception SshException of string * string
 module SshProcess =

@@ -7,8 +7,7 @@ namespace Yaaf.SyncLib.Git
 open System.Diagnostics
 open System.IO
 open Yaaf.SyncLib
-open Yaaf.SyncLib.Helpers
-open Yaaf.SyncLib.Helpers.AsyncTrace
+open Yaaf.AsyncTrace
 
 type BranchType = 
     | Local
@@ -209,6 +208,7 @@ module HandleGitData =
         }
 
 module GitProcess = 
+    let tracer = new TraceSource("Yaaf.SyncLib.Git.GitProcess")
     let createGitProc (gitPath:string) (workingDir:string) (args:GitArguments) = 
         new ToolProcess(gitPath, workingDir, HandleGitArguments.toCommandLine(args))
 
@@ -254,7 +254,7 @@ module GitProcess =
 
     let RunGitStatus git wDir = 
         RunGitStatusAsync git wDir
-            |> convertToAsync
+            |> AsyncTrace.SetTracer (Logging.DefaultTracer tracer "Running Git Status")
             |> Async.RunSynchronously
 
     let RunGitLsRemoteAsync git wDir uri branch = 
@@ -270,7 +270,7 @@ module GitProcess =
 
     let RunGitLsRemote git wDir uri branch = 
         RunGitLsRemoteAsync git wDir uri branch
-            |> convertToAsync
+            |> AsyncTrace.SetTracer (Logging.DefaultTracer tracer "Running Git Ls Remote")
             |> Async.RunSynchronously
       
 

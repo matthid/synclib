@@ -5,10 +5,8 @@
 namespace Yaaf.SyncLib.Git
 
 open Yaaf.SyncLib
-open Yaaf.SyncLib.Helpers
-open Yaaf.SyncLib.Helpers.AsyncTrace
-open Yaaf.SyncLib.Helpers.MatchHelper
 open Yaaf.SyncLib.Git
+open Yaaf.AsyncTrace
 
 open System.IO
 
@@ -67,7 +65,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
 
     /// Resolves Conflicts and 
     let resolveConflicts() = asyncTrace() {
-        let! (t:ITracer) = AsyncTrace.traceInfo()
+        let! (t:ITracer) = AsyncTrace.TraceInfo()
         t.logVerb "Resolving GIT Conflicts in %s" folder.Name
         let! fileStatus = GitProcess.RunGitStatusAsync git (folder.FullPath)
         for f in fileStatus do
@@ -106,7 +104,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
 
     /// Adds all files to the index and does a commit to the repro
     let commitAllChanges() = asyncTrace() {
-        let! (t:ITracer) = AsyncTrace.traceInfo()
+        let! (t:ITracer) = AsyncTrace.TraceInfo()
         t.logVerb "Commiting All Changes in %s" folder.Name
         // Add all files
         do! GitProcess.RunGitAddAsync git (folder.FullPath) (GitAddType.All) ([])
@@ -143,7 +141,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
 
     /// Initialize the repository
     let init() = asyncTrace() {
-        let! (t:ITracer) = AsyncTrace.traceInfo()
+        let! (t:ITracer) = AsyncTrace.TraceInfo()
         t.logInfo "Init GIT Repro %s" folder.Name
         // Check if repro is initialized (ie is a git repro)
         try
@@ -185,7 +183,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
 
     /// The SyncDown Process
     let syncDown() = asyncTrace() {
-        let! (t:ITracer) = AsyncTrace.traceInfo()
+        let! (t:ITracer) = AsyncTrace.TraceInfo()
         progressChanged.Trigger 0.0
         try
             if not isInit then do! init()
@@ -228,7 +226,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
 
     /// The Upsync Process
     let syncUp() = asyncTrace() {
-        let! (t:ITracer) = AsyncTrace.traceInfo()
+        let! (t:ITracer) = AsyncTrace.TraceInfo()
         try
             t.logInfo "Starting GIT SyncUp of %s" folder.Name
             progressChanged.Trigger 0.0

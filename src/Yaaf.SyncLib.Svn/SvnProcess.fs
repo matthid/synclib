@@ -6,9 +6,7 @@ namespace Yaaf.SyncLib.Svn
 
 
 open Yaaf.SyncLib
-open Yaaf.SyncLib.Helpers
-open Yaaf.SyncLib.Helpers.AsyncTrace
-open Yaaf.SyncLib.Helpers.MatchHelper
+open Yaaf.AsyncTrace
 
 
 open System.Diagnostics

@@ -4,8 +4,7 @@
 // ----------------------------------------------------------------------------
 namespace Yaaf.SyncLib
 
-open Yaaf.SyncLib.Helpers.AsyncTrace
-open Yaaf.SyncLib.Helpers
+open Yaaf.AsyncTrace
 
 /// Action the RepositoryFolder-Processor should execute
 type ProcessorMessage = 
@@ -39,37 +38,45 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
                     syncStateChanged.Trigger SyncState.Idle
             with exn -> syncError.Trigger exn
         }
+
+    let traceSource = Logging.MySource "Yaaf.SyncLib.Processing" folder.Name
+    let globalTracer = Logging.DefaultTracer traceSource (sprintf "RepositoryFolder")
+    do  globalTracer.logVerb "Created RepositoryFolder-Type: %s" (x.GetType().FullName)
        
     /// This will ensure that only one sync process is running at any time
     let processor = 
         MailboxProcessor<_>.Start(fun inbox -> 
-            let traceSource = MySource "Yaaf.SyncLib.Processing" folder.Name
             let rec loop i =
                 async {
-                    use tracer = AsyncTrace.DefaultTracer traceSource (i.ToString())
+                    use tracer = globalTracer.childTracer traceSource (sprintf "Round %d" i)
                     try
+                        tracer.logVerb "Waiting for messages"
                         // Get All messages (or wait for the first if non available)
                         let! allmsgs = 
-                            if (inbox.CurrentQueueLength = 0) then
-                                seq { yield inbox.Receive() }
-                            else
-                                seq {
+                            seq { 
+                                if (inbox.CurrentQueueLength = 0) then
+                                    yield inbox.Receive()
+                                else
                                     for i in 1 .. inbox.CurrentQueueLength do
-                                        yield inbox.Receive()
-                                }
+                                        yield inbox.Receive() 
+                            }   
                             |> Async.Parallel
+
+                        tracer.logVerb "got %d messages" allmsgs.Length
                         if (isStarted) then
                             // Make sure SyncDowns are prefered over SyncUp
                             // And also make sure we do not spam our queue
                             for msg in
                                 allmsgs |> Set.ofSeq  |> Seq.sort |> Seq.toList |> List.rev do
-                                let work =
+                                let work, name =
                                     match msg with
                                     | DoSyncUp -> 
-                                        doTask SyncState.SyncUp (fun () -> x.StartSyncUp())
+                                        doTask SyncState.SyncUp (fun () -> x.StartSyncUp()), "syncUp"
                                     | DoSyncDown ->
-                                        doTask SyncState.SyncDown (fun () -> x.StartSyncDown())
-                                do! work |> AsyncTrace.SetTracer tracer
+                                        doTask SyncState.SyncDown (fun () -> x.StartSyncDown()), "syncDown"
+
+                                tracer.logVerb "starting work %s" name
+                                do! work |> AsyncTrace.SetTracer (tracer.childTracer traceSource name)
                     with 
                         | exn -> 
                             tracer.logErr "Error in Processing: %s" (exn.ToString())
@@ -81,10 +88,12 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
 
     /// Requests a UpSync Operation
     member x.RequestSyncUp () = 
+        globalTracer.logVerb "SyncUp requested"
         processor.Post(DoSyncUp)
 
     /// Requests a DownSync Operation
     member x.RequestSyncDown () = 
+        globalTracer.logVerb "SyncDown requested"
         processor.Post(DoSyncDown)
 
     member x.GenerateCommitMessage (files:CommitMessageFile seq) = 
