@@ -85,6 +85,12 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
                 }
             loop 0 
             )
+    do
+        processor.Error
+            |> Event.add 
+                (fun e -> 
+                    globalTracer.logCrit "Mailbox crashed: %s" (e.ToString())
+                    syncError.Trigger e)
 
     /// Requests a UpSync Operation
     member x.RequestSyncUp () = 

@@ -37,6 +37,8 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Helpers.fs" />
+    <Compile Include="AsyncStreamWriter.fs" />
+    <Compile Include="PubsubImplementation.fs" />
     <Compile Include="ManagedFolder.fs" />
     <Compile Include="ChangeWatcher.fs" />
     <Compile Include="ToolProcess.fs" />
@@ -62,6 +64,10 @@
     </None>
   </ItemGroup>
   <ItemGroup>
+    <Reference Include="FSharp.PowerPack">
+      <HintPath>C:\Program Files (x86)\FSharpPowerPack-2.0.0.0\bin\FSharp.PowerPack.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core" />
     <Reference Include="System" />
