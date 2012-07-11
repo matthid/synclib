@@ -16,7 +16,16 @@ HideFsi()
 // Your startup logic / your folders
 let myManagers = [
         // Edit the following lines to change your repositories (NOTE: whitespace is important in F#)
-        
+        CustomManager 
+            Git 
+            (BackendInfo 
+                "GitReproName" 
+                "C:\\users\\me\\documents\\mygitrepro" 
+                "git@mygitserver2:repro.git"
+                (dict ["PubsubUrl",     "tcp://notifications.sparkleshare.org:80";
+                       "PubsubChannel", "akhgfjkasbhdfasdf" ]))
+                
+
         // Add a git repository note the "GitRepro/Test" is the name and no folder
         Manager Git "GitRepro/Test" "C:\\users\\me\\documents\\mygitrepro" "git@mygitserver:repro.git"
 

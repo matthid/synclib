@@ -9,16 +9,7 @@ open Yaaf.SyncLib
 open Yaaf.SyncLib.Git
 
 // Create a manager for a specific folder
-let createManager (backendManager:IBackendManager) name folder server =
-    let manager =
-        backendManager.CreateFolderManager(
-            new ManagedFolderInfo(
-                name, 
-                folder,
-                server,
-                "",
-                new System.Collections.Generic.Dictionary<_,_>()))
-
+let addManagerEvents (manager:IManagedFolder) =
     // Listen to the events
     manager.ProgressChanged
         |> Event.add (fun p -> printfn "New Progress %s" (p.ToString()))
@@ -46,5 +37,25 @@ let createManager (backendManager:IBackendManager) name folder server =
         |> Event.add
             (fun changed -> printfn "State changed: %s" (changed.ToString()))
 
+let start (myManagers:(ManagedFolderInfo*IManagedFolder) list) = 
+    
+    let managers = 
+        myManagers |> List.map snd
 
-    manager
+    managers 
+        |> List.iter addManagerEvents
+
+    // Start the service
+    for manager in managers do
+        manager.StartService()
+    printfn ">> Started, any key to exit the services"
+    System.Console.ReadLine() |> ignore
+
+    // Stop the service to no listen to the folder any longer (any running operations will be finished)
+    for manager in managers do
+        manager.StopService()
+
+    printfn ">> Stopped, any key to exit the program"
+
+    // You could start the service again if you want
+    System.Console.ReadLine() |> ignore

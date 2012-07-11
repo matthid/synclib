@@ -15,7 +15,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
     inherit RepositoryFolder(folder)
 
     let localWatcher = new SimpleLocalChangeWatcher(folder.FullPath, (fun err -> x.ReportError err))
-    let remoteWatcher = new RemoteChangeWatcher(folder)
+    let remoteWatcher = RemoteConnectionManager.getRemoteChanged(folder)
 
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()
@@ -42,9 +42,13 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
             |> Event.add (fun args -> 
                 x.RequestSyncUp())
 
-        remoteWatcher.Changed 
-            |> Event.add 
-                (fun l -> x.RequestSyncDown())
+        match remoteWatcher with
+        | Option.Some event ->
+            event 
+                |> Event.add 
+                    (fun () -> x.RequestSyncDown())
+        | Option.None -> ()
+
 
     let toSshPath (remote:string) = 
         let remote = 

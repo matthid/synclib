@@ -17,10 +17,6 @@ open Gtk
 open System.IO
 open Mono.Unix
 
-type BackendType = 
-    | Git
-    | Svn
-
 
 module Scripting = 
     
@@ -31,8 +27,8 @@ module Scripting =
         let HideProcWindow(proc:System.Diagnostics.Process) = 
             ShowWindow(proc.MainWindowHandle, 0) |> ignore
 
-    let gitBackendManager = new GitBackendManager() :> IBackendManager
-    let svnBackendManager = new SvnBackendManager() :> IBackendManager
+    let Git = new GitBackendManager() :> IBackendManager
+    let Svn = new SvnBackendManager() :> IBackendManager
 
     let HideFsi () = 
         InterOp.HideProcWindow (System.Diagnostics.Process.GetCurrentProcess())
@@ -40,17 +36,13 @@ module Scripting =
     let CustomManager (backendManager:IBackendManager) info = 
         info, backendManager.CreateFolderManager info
 
-    let BackendInfo name folder server announceUrl additionalInfo = 
+    let BackendInfo name folder server additionalInfo = 
         new ManagedFolderInfo (
-            name, folder, server, announceUrl, additionalInfo)
+            name, folder, server, additionalInfo)
 
-    let Manager backendType name folder server = 
-        let backend = 
-            match backendType with
-            | Git -> gitBackendManager
-            | Svn -> svnBackendManager
+    let Manager backend name folder server = 
         let info =
-            BackendInfo name folder server "" (new System.Collections.Generic.Dictionary<_,_>())
+            BackendInfo name folder server (new System.Collections.Generic.Dictionary<_,_>())
         CustomManager 
             backend
             info
