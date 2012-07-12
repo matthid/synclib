@@ -31,12 +31,12 @@ module PubsubImplementation =
         | ReceivedMessage of string
 
     type internal PubsubProcessData = {
-        Queue : obj queue
+        Queue : obj Queue
         SubscribedChannels : string list
         InfoData : (string * string) list }
         with 
             static member Empty = {
-                                    Queue = queue.Empty
+                                    Queue = Queue.Empty
                                     SubscribedChannels = list.Empty
                                     InfoData = list.Empty }
 
@@ -84,8 +84,8 @@ module PubsubImplementation =
                     do! writer.WriteLine(s) 
                     }
                 /// Take the next item of the queue, respond and return the new queue
-                let respondQueue (queue:queue<obj>) (m:'a) = 
-                    let q, v = queue.Dequeue()
+                let respondQueue (queue:Queue<obj>) (m:'a) = 
+                    let v,q = queue |> Queue.dequeue
                     (v:?>AsyncReplyChannel<'a>).Reply(m)
                     q
 
@@ -156,10 +156,10 @@ module PubsubImplementation =
                     match msg with 
                     | Ping(replyMessage) -> 
                         do! writeLine (sprintf "ping")
-                        return! loop { data with Queue = (data.Queue.Enqueue(replyMessage)) }
+                        return! loop { data with Queue = (data.Queue |> Queue.enqueue (replyMessage:>obj)) }
                     | Info(replyMessage) -> 
                         do! writeLine (sprintf "info")
-                        return! loop { data with Queue = (data.Queue.Enqueue(replyMessage)) }
+                        return! loop { data with Queue = (data.Queue |> Queue.enqueue (replyMessage:>obj)) }
                     | Subscribe(channel) ->
                         do! writeLine (sprintf "subscribe %s" channel)
                         return! loop { data with SubscribedChannels = channel :: data.SubscribedChannels }

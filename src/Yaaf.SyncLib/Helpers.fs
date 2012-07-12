@@ -13,22 +13,52 @@ open System.IO
 /// Module for little helper functions
 [<AutoOpen>]
 module Helpers = 
+    /// Simple functional queue implementation
+    type Queue<'a> = 
+        Queue of 'a list * 'a list
+    with
+        static member Empty = Queue([], []):Queue<'a>
+    /// Operations on the functional Queue
+    module Queue =
+        let init q = Queue(q, []):Queue<'a> 
+        //let empty = Queue.Empty:Queue<'a> 
+        let liftListFun f q = 
+            match q with
+            | Queue(outList,inList) -> Queue(f outList, f inList)
+        let map f = liftListFun (List.map f)
+        /// Adds an item to the queue
+        let enqueue item q = 
+            match q with
+            | Queue(outList, inList) -> Queue(outList, item :: inList)
+        /// Removes an item from the queue
+        let rec dequeue q = 
+            match q with 
+            | Queue([],[]) -> failwith "cannot dequeue from empty queue"
+            | Queue(o :: outList, inList) -> o, Queue(outList, inList)
+            | Queue([], inList) -> Queue(inList |> List.rev, []) |> dequeue
 
-    module Collections = 
-        type Queue<'a>(xs:'a list,rxs:'a list) =
-            new()=Queue<'a>([],[])
-            static member Empty = new Queue<'a>()
-            static member Init l = new Queue<'a>(l, [])
-            member q.IsEmpty = (xs.IsEmpty) && (rxs.IsEmpty)
-            member q.Enqueue(x) = Queue(xs,x::rxs)
-            member q.Dequeue() =
-                if q.IsEmpty then 
-                    failwith "cannot dequeue from empty queue"
-                else 
-                    match xs with
-                    | [] -> (Queue(List.rev rxs,[])).Dequeue()
-                    | y::ys -> (Queue(ys, rxs)),y
-    type queue<'a> = Collections.Queue<'a>
+        let filter f = liftListFun (List.filter f)
+        let choose f = liftListFun (List.choose f)
+        /// brings all items to the first Queue component (the outlist)
+        /// Allowed an easy match with only 2 cases, or map/filter/choose with side-effects
+        let processQueue q =
+            match q with
+            | Queue(outList,inList) -> Queue(List.append outList (inList |> List.rev), [])
+        let liftGeneralListFun f q = 
+            match q |> processQueue with
+            | Queue(queueList, []) -> f queueList
+            | Queue(_,_) -> failwith "The queue should be processed!"
+        let exists f = liftGeneralListFun (List.exists f)
+        let forAll f = liftGeneralListFun (List.forall f)
+        let fold f state = liftGeneralListFun (List.fold f state)
+        let foldBack q f state = liftGeneralListFun (List.foldBack f state) q
+        let toSeq q =
+            match q with 
+            | Queue(outList,inList)->
+                seq {
+                    yield! outList |> List.toSeq
+                    yield! inList |> List.rev |> List.toSeq 
+                }
 
     /// Helps for interaction with sockets in an async way
     module SocketHelper =

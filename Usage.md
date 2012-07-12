@@ -18,6 +18,9 @@ But it is true.
 
 ## Simple Usage
 
+This will be more detailed in the future!
+
+### Configuration
 The first lines are really only there to load the required dependencies and make the Scripting more smooth.
 
 ```fsharp
@@ -79,7 +82,18 @@ RunGui myManagers
 ```
 Is starting the UI with the given configuration. Thats basically all you need to do.
 
-This API is not finished jet so ...
+This API is not finished jet so be prepared for changes...
+
+### Running
+
+Now if you have your RunApplication.fsx properly configured (or should i say "programmed")
+you can run "your" program. 
+
+If you have downloaded the binaries just run "StartUi.cmd" 
+under Windows and "StartUi.sh" under Linux/Max. 
+On Linux/Mac you must have a Mono > 2.10.8 installed and in your PATH
+Basically what you have to do is copy the lib/FSharp contents to your
+
 
 ## Advanced configuration
 

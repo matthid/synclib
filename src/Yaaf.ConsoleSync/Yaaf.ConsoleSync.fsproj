@@ -39,8 +39,6 @@
   <ItemGroup>
     <None Include="App.config" />
     <Compile Include="BackendTester.fs" />
-    <Compile Include="GitTesting.fs" />
-    <Compile Include="SvnTesting.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
@@ -59,6 +57,11 @@
     <ProjectReference Include="..\Yaaf.SyncLib.Svn\Yaaf.SyncLib.Svn.fsproj">
       <Name>Yaaf.SyncLib.Svn</Name>
       <Project>{f7dbf542-b3f1-4163-ac29-bf16c6633211}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\Yaaf.SyncLib.Ui\Yaaf.SyncLib.Ui.fsproj">
+      <Name>Yaaf.SyncLib.Ui</Name>
+      <Project>{a37e7640-397d-4fb4-9f09-3d447d4659d5}</Project>
       <Private>True</Private>
     </ProjectReference>
     <ProjectReference Include="..\Yaaf.SyncLib\Yaaf.SyncLib.fsproj">

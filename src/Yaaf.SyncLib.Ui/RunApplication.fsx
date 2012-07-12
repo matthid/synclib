@@ -22,8 +22,8 @@ let myManagers = [
                 "GitReproName" 
                 "C:\\users\\me\\documents\\mygitrepro" 
                 "git@mygitserver2:repro.git"
-                (dict ["PubsubUrl",     "tcp://notifications.sparkleshare.org:80";
-                       "PubsubChannel", "akhgfjkasbhdfasdf" ]))
+                (dict [("PubsubUrl",     "tcp://notifications.sparkleshare.org:80");
+                       ("PubsubChannel", "akhgfjkasbhdfasdf" )]))
                 
 
         // Add a git repository note the "GitRepro/Test" is the name and no folder

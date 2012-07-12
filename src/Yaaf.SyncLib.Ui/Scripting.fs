@@ -33,7 +33,7 @@ module Scripting =
     let HideFsi () = 
         InterOp.HideProcWindow (System.Diagnostics.Process.GetCurrentProcess())
 
-    let CustomManager (backendManager:IBackendManager) info = 
+    let CustomManager (backendManager:IBackendManager) (info:ManagedFolderInfo) = 
         info, backendManager.CreateFolderManager info
 
     let BackendInfo name folder server additionalInfo = 
@@ -43,7 +43,7 @@ module Scripting =
     let Manager backend name folder server = 
         let info =
             BackendInfo name folder server (new System.Collections.Generic.Dictionary<_,_>())
-        CustomManager 
+        CustomManager
             backend
             info
 
