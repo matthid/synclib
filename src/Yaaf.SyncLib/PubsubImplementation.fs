@@ -30,6 +30,7 @@ module PubsubImplementation =
         /// Notify the processor on a received message
         | ReceivedMessage of string
 
+    /// Internal data used by PubsubClient-Processor
     type internal PubsubProcessData = {
         Queue : obj Queue
         SubscribedChannels : string list

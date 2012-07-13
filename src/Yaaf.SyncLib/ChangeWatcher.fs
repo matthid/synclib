@@ -7,7 +7,7 @@ namespace Yaaf.SyncLib
 open Yaaf.SyncLib.Helpers
 open Yaaf.SyncLib.PubsubImplementation
 
-/// Opt in Api to watch local changes, will trigger on any folder changes
+/// Opt in Api to watch local changes, will trigger on any folder changes on the given folder
 type SimpleLocalChangeWatcher(folder : string, onError)  = 
     let changedEvent = new Event<System.IO.WatcherChangeTypes * string * string>()
     let watcher = new System.IO.FileSystemWatcher(folder, "*")
@@ -104,10 +104,11 @@ type PubsubChangeWatcher(event:IEvent<_>) =
     member x.Changed = changedEvent.Publish
 
 type RemoteConnectionType =
-    | NoConnectionType
     | Pubsub of System.Uri * string
-     
+    
+/// Opt in Api for remote notification
 module RemoteConnectionManager = 
+    /// gets an PubsubConnection to the given Uri
     let getPubsubConnection = 
         let keyFromUri (uri:System.Uri) = sprintf "%s_%d" uri.Host uri.Port
         let connections = new System.Collections.Generic.Dictionary<_,_>()
@@ -120,31 +121,41 @@ module RemoteConnectionManager =
                     let con = new PubsubConnection(uri.Host, uri.Port)
                     connections.Add(key, con)
                     con))
-
-    let getRemoteConnectionType (folder:ManagedFolderInfo) =
-        match folder.Additional.TryGetValue("PubsubUrl") with
-        | true, pubsubUri -> 
-            match folder.Additional.TryGetValue("PubsubChannel") with
-            | true, pubsubChannel -> Pubsub(new System.Uri(pubsubUri),pubsubChannel)
-            | _ -> NoConnectionType
-        | _ -> NoConnectionType
     
-    let getRemoteChanged =
+    /// given an Data dictionary we will return all available remote data server
+    let extractRemoteConnectionData (dataDict:System.Collections.Generic.IDictionary<string,string>) =
+        seq {
+            match dataDict |> Dict.tryGetValue "PubsubUrl", 
+                  dataDict |> Dict.tryGetValue "PubsubChannel" with
+            | Some (pubsubUri), Some(pubsubChannel) -> 
+                yield Pubsub(new System.Uri(pubsubUri),pubsubChannel)
+            | _ -> ()
+        }
+    /// given a remote data server will return the event for changes
+    let remoteDataToEvent = 
         let lockObj = new obj()
+        (fun t ->
+            match t with
+            | Pubsub(uri, channel) -> 
+                let con = getPubsubConnection uri
+                // This is save because all is private in this module
+                // And this is the only place with a Subscribe call
+                lock lockObj (fun () ->
+                    if not (con.Subscriptions |> List.exists (fun s -> s = channel)) then
+                         con.Subscribe(channel))
+                con.[channel]
+                    |> Event.map (fun t -> ()))
 
-        (fun (folder:ManagedFolderInfo) ->
-        match getRemoteConnectionType folder with
-        | NoConnectionType -> None
-        | Pubsub(uri, channel) -> 
-            let con = getPubsubConnection uri
-            // This is save because all is private in this module
-            // And this is the only place with a Subscribe call
-            lock lockObj (fun () ->
-                if not (con.Subscriptions |> List.exists (fun s -> s = channel)) then
-                     con.Subscribe(channel))
-            con.[channel]
-                |> Event.map (fun t -> ()) 
-                |> Some
-                )
+    /// Will calculate a merged event for all available remote data server
+    let calculateMergedEvent =
+        let nonEvent = new Event<unit>()     
+        (fun (folder:RemoteConnectionType seq) ->
+            folder
+            |> Seq.map remoteDataToEvent
+            |> Seq.fold
+                (fun state item ->
+                    state |> Event.merge item)
+                nonEvent.Publish)
+
 
 

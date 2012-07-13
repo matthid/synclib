@@ -13,6 +13,12 @@ open System.IO
 /// Module for little helper functions
 [<AutoOpen>]
 module Helpers = 
+    module Dict = 
+        let tryGetValue k (d:System.Collections.Generic.IDictionary<_,_>) =
+            match d.TryGetValue(k) with
+            | true, v -> Option.Some (v)
+            | false, _ -> Option.None
+
     /// Simple functional queue implementation
     type Queue<'a> = 
         Queue of 'a list * 'a list
@@ -145,10 +151,10 @@ module Helpers =
 
     module Observable =
         /// Executes f just after subscribing
-      let guard f (e:IObservable<'Args>) = 
-        { new IObservable<'Args> with 
-            member x.Subscribe(observer) = 
-              let rm = e.Subscribe(observer) in f(); rm }
+        let guard f (e:IObservable<'Args>) = 
+            { new IObservable<'Args> with 
+                member x.Subscribe(observer) = 
+                  let rm = e.Subscribe(observer) in f(); rm }
 
     /// Checks if contain is a substring of data
     let (|Contains|_|) (contain:string) (data:string) =   

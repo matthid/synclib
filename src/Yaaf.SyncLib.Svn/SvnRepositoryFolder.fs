@@ -16,7 +16,10 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
     inherit RepositoryFolder(folder)
 
     let localWatcher = new SimpleLocalChangeWatcher(folder.FullPath, (fun err -> x.ReportError err))
-    let remoteWatcher = RemoteConnectionManager.getRemoteChanged(folder)
+    let remoteEvent = 
+        folder.Additional
+            |> RemoteConnectionManager.extractRemoteConnectionData
+            |> RemoteConnectionManager.calculateMergedEvent
 
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()
@@ -35,14 +38,10 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
                     not (oldPath.StartsWith gitPath) && not (newPath.StartsWith gitPath))
             // Reduce event
             |> Event.reduceTime (System.TimeSpan.FromMinutes(1.0))
-            |> Event.add (fun args -> 
-                x.RequestSyncUp())
-        match remoteWatcher with
-        | Option.Some event ->
-            event 
-                |> Event.add 
-                    (fun () -> x.RequestSyncDown())
-        | Option.None -> ()
+            |> Event.add (fun args -> x.RequestSyncUp())
+
+        remoteEvent
+            |> Event.add x.RequestSyncDown
 
     let init() = asyncTrace() {
         let! (t:ITracer) = traceInfo()

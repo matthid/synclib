@@ -21,7 +21,9 @@ type ManagedFolderInfo(name:string, path:string, remote:string, dict:System.Coll
 
 /// The Type of Conflict that occured while syncing
 type SyncConflict = 
+    /// Indicates a conflict in the merge process of the given file
     | MergeConflict of string
+    /// Another unknown conflict
     | Unknown of string
 
 /// The state of the syncing process

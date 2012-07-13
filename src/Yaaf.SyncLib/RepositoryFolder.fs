@@ -171,7 +171,7 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
         member x.SyncStateChanged = syncStateChanged.Publish
 
 /// This is a example implementation you can instantly start with
-type EmptyRepository(folder:ManagedFolderInfo) as x =  
+type EmptyRepository(folder:ManagedFolderInfo) =  
     inherit RepositoryFolder(folder)
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()
