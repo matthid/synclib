@@ -40,13 +40,36 @@ I will add some usage code here but for now just look into the Program.fs of Yaa
 
 ## Building
 
+
 This Section will be expended in the future.
+
+### Windows
 
 For now: fire up Visual Studio and build the Projekt (Windows Only)
 
 I'm working on a FAKE build script (https://github.com/forki/FAKE).
 I'd like to have a FAKE build script which will work on linux and windows. 
 So if somebody has some insight on this just go ahaid and send a path.
+
+Starting:
+Enter the folder src\Yaaf.SyncLib.Ui\bin\Debug and run StartUi.cmd from there.
+
+### Linux
+Building
+```bash
+git clone git://github.com/matthid/synclib.git
+cd synclib
+export FSC="mono `pwd`/lib/FSharp-4.0/fsc.exe"
+export FSI="mono `pwd`/lib/FSharp-4.0/fsi.exe"
+./build_mono.sh
+```
+
+Running
+```bash
+cd build/bin
+$FSI --exec --nologo RunApplication.fsx
+```
+
 
 ## Contributing
 

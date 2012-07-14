@@ -11,7 +11,7 @@ open Yaaf.SyncLib
 open Yaaf.SyncLib.Ui
 open Yaaf.SyncLib.Ui.Scripting
 
-HideFsi()
+//HideFsi()
 
 // Your startup logic / your folders
 let myManagers = [
