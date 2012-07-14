@@ -65,4 +65,5 @@ cp src/Yaaf.ConsoleSync/bin/Debug/Yaaf.ConsoleSync.exe build/bin/lib/
 cp lib/Powerpack/FSharp.PowerPack.dll build/bin/lib/
 cp lib/Yaaf.AsyncTrace/Yaaf.AsyncTrace.dll build/bin/lib/
 cp lib/FSharp-4.0/* build/bin/
+cp src/Yaaf.SyncLib.Ui/fsi.exe.config build/bin/
 
