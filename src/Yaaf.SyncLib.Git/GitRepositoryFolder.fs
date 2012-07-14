@@ -26,7 +26,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
     let mutable isInit = false
     let git = folder.Additional.["gitpath"]
     let sshPath = folder.Additional.["sshpath"]
-    
+    let run f = f git folder.FullPath
     // Starts watching the given Changewatcher (uses the given processor-message)
     
 
@@ -68,16 +68,16 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
     let resolveConflicts() = asyncTrace() {
         let! (t:ITracer) = AsyncTrace.TraceInfo()
         t.logVerb "Resolving GIT Conflicts in %s" folder.Name
-        let! fileStatus = GitProcess.RunGitStatusAsync git (folder.FullPath)
+        let! fileStatus = GitProcess.status |> run
         for f in fileStatus do
             if (f.Local.Path.EndsWith(".sparkleshare") || f.Local.Path.EndsWith(".empty")) then
-                do! GitProcess.RunGitCheckoutAsync git (folder.FullPath) (CheckoutType.Conflict(Theirs, [f.Local.Path]))
+                do! GitProcess.checkout (CheckoutType.Conflict(Theirs, [f.Local.Path]))  |> run
             // Both modified, copy server version to a new file
             else if (f.Local.Status = GitStatusType.Updated || f.Local.Status = GitStatusType.Added)
                     && (f.Server.Status = GitStatusType.Updated || f.Server.Status = GitStatusType.Added) 
             then
                 // Copy ours to conflicting
-                do! GitProcess.RunGitCheckoutAsync git (folder.FullPath) (CheckoutType.Conflict(Ours, [f.Local.Path]))
+                do! GitProcess.checkout (CheckoutType.Conflict(Ours, [f.Local.Path])) |> run
                 let newName = 
                     sprintf "%s (conflicting on %s)%s"
                         (Path.GetFileNameWithoutExtension f.Local.Path)
@@ -90,14 +90,14 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                     Path.Combine(folder.FullPath, f.Local.Path),     
                     Path.Combine(folder.FullPath, newFile))
                 // Use theirs
-                do! GitProcess.RunGitCheckoutAsync git (folder.FullPath) (CheckoutType.Conflict(Theirs, [f.Local.Path]))
+                do! GitProcess.checkout (CheckoutType.Conflict(Theirs, [f.Local.Path])) |> run
                 syncConflict.Trigger (MergeConflict(f.Local.Path))
             else if (f.Local.Status = GitStatusType.Deleted
                     && f.Server.Status = GitStatusType.Updated)
             then
-                do! GitProcess.RunGitAddAsync git (folder.FullPath) (GitAddType.NoOptions) ([f.Local.Path])
+                do! GitProcess.add (GitAddType.NoOptions) ([f.Local.Path]) |> run
             
-        do! GitProcess.RunGitAddAsync git (folder.FullPath) (GitAddType.All) ([])
+        do! GitProcess.add (GitAddType.All) ([]) |> run
 
         // Here should be no more conflicts
         // TODO: Check if there are and throw exception if there are
@@ -108,9 +108,9 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
         let! (t:ITracer) = AsyncTrace.TraceInfo()
         t.logVerb "Commiting All Changes in %s" folder.Name
         // Add all files
-        do! GitProcess.RunGitAddAsync git (folder.FullPath) (GitAddType.All) ([])
+        do! GitProcess.add (GitAddType.All) ([]) |> run
         // procude a commit message
-        let! changes = GitProcess.RunGitStatusAsync git (folder.FullPath)
+        let! changes = GitProcess.status |> run
         let normalizedChanges =
             changes
                 |> Seq.filter (fun f -> match f.Local.Status with
@@ -137,7 +137,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
 
         if changes.Count > 0 then
             // Do the commit
-            do! GitProcess.RunGitCommitAsync git (folder.FullPath) (commitMessage)
+            do! GitProcess.commit (commitMessage) |> run
     }
 
     /// Initialize the repository
@@ -146,12 +146,12 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
         t.logInfo "Init GIT Repro %s" folder.Name
         // Check if repro is initialized (ie is a git repro)
         try
-            do! GitProcess.RunGitStatusAsync git (folder.FullPath) |> AsyncTrace.Ignore
+            do! GitProcess.status |> run |> AsyncTrace.Ignore
         with
         | ToolProcessFailed(code, cmd, output, error) 
             when error.Contains "fatal: Not a git repository (or any of the parent directories): .git" ->
                 t.logWarn "%s is no GIT Repro so init one" folder.Name
-                do! GitProcess.RunGitInitAsync git (folder.FullPath)
+                do! GitProcess.init |> run
                 
                     
            
@@ -159,7 +159,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
         do! SshProcess.ensureConnection sshPath folder.FullPath (toSshPath folder.Remote) false
 
         // Check whether the "synclib" remote point exists
-        let! remotes = GitProcess.RunGitRemoteAsync git (folder.FullPath) (ListVerbose)
+        let! remotes = GitProcess.remote (ListVerbose) |> run
         let syncRemotes = 
             remotes 
                 |> Seq.filter (fun t -> t.Name = remoteName)
@@ -167,10 +167,10 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
         if (syncRemotes.Length < 2 || syncRemotes |> Seq.exists (fun t -> t.Url <> folder.Remote)) then
             if (syncRemotes.Length > 0) then
                 t.logWarn "%s has invalid %s remote entry - removing" folder.Name remoteName
-                do! GitProcess.RunGitRemoteAsync git folder.FullPath (Remove(remoteName)) |> AsyncTrace.Ignore
+                do! GitProcess.remote (Remove(remoteName)) |> run |> AsyncTrace.Ignore
                 
             t.logInfo "adding %s remote entry to %s" remoteName folder.Name
-            do! GitProcess.RunGitRemoteAsync git folder.FullPath (RemoteType.Add(remoteName, folder.Remote)) |> AsyncTrace.Ignore
+            do! GitProcess.remote (RemoteType.Add(remoteName, folder.Remote)) |> run |> AsyncTrace.Ignore
             
         isInit <- true
     }
@@ -192,19 +192,17 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
             t.logInfo "Starting GIT Syncdown of %s" folder.Name
 
             // Fetch changes
-            do! GitProcess.RunGitFetchAsync 
-                    git 
-                    folder.FullPath 
+            do! GitProcess.fetch
                     remoteName
                     "master"
                     (fun newProgress -> progressChanged.Trigger (newProgress * 0.95))
-                |> AsyncTrace.Ignore
+                |> run |> AsyncTrace.Ignore
 
             // Merge changes into local directory via "git rebase FETCH_HEAD"
             do! commitAllChanges()
             try
                 t.logInfo "Starting GIT SyncDown-Merging of %s" folder.Name
-                do! GitProcess.RunGitRebaseAsync git folder.FullPath (Start("FETCH_HEAD", "master"))
+                do! GitProcess.rebase (Start("FETCH_HEAD", "master")) |> run
             with
                 | ToolProcessFailed(exitCode, cmd, o, e) ->
                     match e with
@@ -234,13 +232,11 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
 
             // Push data up to server
             do! commitAllChanges()
-            do! GitProcess.RunGitPushAsync 
-                    git 
-                    folder.FullPath
+            do! GitProcess.push
                     remoteName
                     "master"
                     (fun newProgress -> progressChanged.Trigger newProgress)
-                        
+                |> run   
             progressChanged.Trigger 1.0
         with 
             | ToolProcessFailed(exitCode, cmd, o ,e) ->
