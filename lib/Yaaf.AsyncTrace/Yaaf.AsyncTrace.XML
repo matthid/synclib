@@ -113,12 +113,57 @@
 <member name="">
 
 </member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
 <member name="T:Yaaf.AsyncTrace.AsyncTraceLogic.AsyncTrace">
 <summary>
  Allows tracing of async workflows
 </summary>
 </member>
 <member name="T:Yaaf.AsyncTrace.AsyncTraceLogic">
+
+</member>
+<member name="">
+
+</member>
+<member name="">
+
+</member>
+<member name="T:Yaaf.AsyncTrace.CopyListenerHelper">
 
 </member>
 <member name="">
