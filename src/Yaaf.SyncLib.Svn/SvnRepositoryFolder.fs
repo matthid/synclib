@@ -16,7 +16,7 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
     inherit RepositoryFolder(folder)
 
     let localWatcher = new SimpleLocalChangeWatcher(folder.FullPath, (fun err -> x.ReportError err))
-    let remoteEvent = 
+    let pushEvent, remoteEvent = 
         folder.Additional
             |> RemoteConnectionManager.extractRemoteConnectionData
             |> RemoteConnectionManager.calculateMergedEvent
@@ -203,6 +203,8 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
         
         // Do the commit
         do! SvnProcess.commit commitMessage |> invokeSvn
+        // NOTE: Check it there was indeed something pushed
+        pushEvent.Trigger("svnupdate")
     }    
     
     override x.StartSyncDown () = 

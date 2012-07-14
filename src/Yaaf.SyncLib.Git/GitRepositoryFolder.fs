@@ -15,7 +15,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
     inherit RepositoryFolder(folder)
 
     let localWatcher = new SimpleLocalChangeWatcher(folder.FullPath, (fun err -> x.ReportError err))
-    let remoteEvent = 
+    let pushEvent, remoteEvent = 
         folder.Additional
             |> RemoteConnectionManager.extractRemoteConnectionData
             |> RemoteConnectionManager.calculateMergedEvent
@@ -250,6 +250,9 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                     "master"
                     (fun newProgress -> progressChanged.Trigger newProgress)
                 |> run   
+            
+            // NOTE: Check it there was indeed something pushed
+            pushEvent.Trigger("gitupdate")
             progressChanged.Trigger 1.0
         with 
             | GitNoMasterBranch -> 

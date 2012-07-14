@@ -38,6 +38,7 @@ type SimpleLocalChangeWatcher(folder : string, onError)  =
 type PubsubConnectionMessages = 
     | SetNewPubsub
     | Subscribe of string
+    | Announce of string * string
     | Unsubscribe of string
 
 /// Wrapper around PubsubClient which takes care of errors
@@ -62,7 +63,8 @@ type PubsubConnection(host, port) as x =
     let unsubscribe c =   
         subscriptions <- subscriptions |> List.filter (fun channel -> c <> channel) 
         pubsub.Unsubscribe(c)
-
+    let announce c m = 
+        pubsub.Announce c m
     let processor = 
         MailboxProcessor.Start(fun inbox -> async {
             while true do
@@ -70,6 +72,7 @@ type PubsubConnection(host, port) as x =
                 match msg with 
                 | SetNewPubsub -> setnewPubsub()
                 | Subscribe(c) -> subscribe c
+                | Announce(c,m) -> announce c m
                 | Unsubscribe(c) -> unsubscribe c
                 })
 
@@ -89,6 +92,8 @@ type PubsubConnection(host, port) as x =
     member x.Subscribe c = processor.Post(Subscribe(c))
     /// Unsubscibes to the given channel
     member x.Unsubscribe c = processor.Post(Unsubscribe(c))
+    /// Announces a message to the given channel
+    member x.Announce c m = processor.Post(Announce(c, m))
     /// Lists the current subscriptions
     member x.Subscriptions with get () = subscriptions
 
@@ -138,12 +143,16 @@ module RemoteConnectionManager =
         (fun t ->
             match t with
             | Pubsub(uri, channel) -> 
+                let pushedEvent = new Event<string>()
                 let con = getPubsubConnection uri
                 // This is save because all is private in this module
                 // And this is the only place with a Subscribe call
                 lock lockObj (fun () ->
                     if not (con.Subscriptions |> List.exists (fun s -> s = channel)) then
                          con.Subscribe(channel))
+                pushedEvent.Publish
+                    |> Event.add (con.Announce channel)
+                pushedEvent,
                 con.[channel]
                     |> Event.map (fun t -> ()))
 
@@ -152,15 +161,17 @@ module RemoteConnectionManager =
         let nonEvent = new Event<unit>()     
         (fun (folder:RemoteConnectionType seq) -> asyncTrace() {
             let! (tracer:ITracer) = AsyncTrace.TraceInfo()
+            let pushedEvent = new Event<string>()
             let count, event =
                 folder
                 |> Seq.map remoteDataToEvent
                 |> Seq.fold
-                    (fun (i,state) item ->
+                    (fun (i,state) (innerPushedEvent, item) ->
+                        pushedEvent.Publish |> Event.add (fun n -> innerPushedEvent.Trigger n)
                         i+1, state |> Event.merge item)
                     (0, nonEvent.Publish)
             if count = 0 then tracer.logWarn "No remote connectiondata! Automatic Remote Updates will be disabled!"
-            return event
+            return pushedEvent, event
         })
 
 
