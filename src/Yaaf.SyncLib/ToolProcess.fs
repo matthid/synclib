@@ -43,6 +43,8 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
                     with
                         // already finished
                         | :? System.InvalidOperationException -> ()
+                        // Access denied -> same as above
+                        | :? System.ComponentModel.Win32Exception -> ()
                     customExn := exn
                 )
         c, customExn
@@ -134,7 +136,7 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
                     e.Data.["Error"] <- error
                     e.Data.["ExitCode"] <- exitCode
                     e.Data.["Cmd"] <- failedCmd
-                    t.logErr "ToolProcess custom fail!\n\tCommand Line (exited with %d): %s\n\tCustomExn: %A\n\tOutput: %s\n\tError: %s" exitCode e failedCmd output error
+                    t.logWarn "ToolProcess custom fail!\n\tCommand Line (exited with %d): %s\n\tCustomExn: %A\n\tOutput: %s\n\tError: %s" exitCode failedCmd e output error
                     raise e
 
             // Check exitcode

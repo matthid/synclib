@@ -64,6 +64,9 @@
     <Reference Include="System.Configuration" />
     <Reference Include="System.Core" />
     <Reference Include="System.Numerics" />
+    <Reference Include="Yaaf.AsyncTrace">
+      <HintPath>..\..\lib\Yaaf.AsyncTrace\Yaaf.AsyncTrace.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <ItemGroup>
     <Compile Include="GtkUtils.fs" />
@@ -74,6 +77,9 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <None Include="StartUi.cmd">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="fsi.exe.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
@@ -98,7 +104,8 @@
   <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft F#\v4.0\Microsoft.FSharp.Targets" Condition=" Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')" />
   <PropertyGroup>
     <PostBuildEvent>move "$(ProjectDir)$(OutDir)RunApplication.fsx" "$(ProjectDir)$(OutDir)..\RunApplication.fsx"
-move "$(ProjectDir)$(OutDir)StartUi.cmd" "$(ProjectDir)$(OutDir)..\StartUi.cmd"</PostBuildEvent>
+move "$(ProjectDir)$(OutDir)StartUi.cmd" "$(ProjectDir)$(OutDir)..\StartUi.cmd"
+move "$(ProjectDir)$(OutDir)fsi.exe.config" "$(ProjectDir)$(OutDir)..\fsi.exe.config"</PostBuildEvent>
   </PropertyGroup>
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
 	     Other similar extension points exist, see Microsoft.Common.targets.

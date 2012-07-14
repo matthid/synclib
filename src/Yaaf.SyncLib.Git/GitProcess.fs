@@ -206,9 +206,44 @@ module HandleGitData =
             Local = { Status = s1; Path = p1}; 
             Server = { Status = s2; Path = p2}
         }
-
+/// Permission of the given file was denied (can be "unknown filename") 
+exception GitPermissionDenied of string
+/// Push was rejected
+exception GitRejected
+/// We are stuck on rebase (git tells us to run --abort, --continue or --skip)
+exception GitStuckRebase
+/// We have no master Branch (can happen when we have no initial commit)
+exception GitNoMasterBranch
+/// We are not in a git repository
+exception GitNoRepository
+/// Unstaged changes
+exception GitUnstagedChanges
+/// Git merge conflict
+exception GitMergeConflict
+/// Manages the git process
 module GitProcess = 
     let tracer = new TraceSource("Yaaf.SyncLib.Git.GitProcess")
+    let handleGitErrorLine l = 
+        match l with
+        // unable to unlink old 'Microsoft Word Document (neu).docx' (Permission denied)
+        | StartsWith "error: unable to unlink old '" rest when l.Contains("Permission denied") ->
+            let endFileName = rest.IndexOf("'")
+            let fileName =
+                if (endFileName <> -1) then rest.Substring(0, endFileName)
+                else "unknown filename"
+            raise (GitPermissionDenied(fileName))
+        | Contains "Permission denied" -> raise (GitPermissionDenied("unknown filename"))
+        | Contains "! [rejected]" -> raise GitRejected
+        | Contains "git rebase (--continue | --abort | --skip)" -> raise GitStuckRebase
+        | Contains "fatal: no such branch: master" 
+        | Contains "error: src refspec master does not match any"-> raise GitNoMasterBranch
+        | Contains "fatal: Not a git repository (or any of the parent directories): .git"-> raise GitNoRepository
+        | Contains "Cannot rebase: You have unstaged changes."-> raise GitUnstagedChanges
+        | Contains "Cannot merge"-> raise GitMergeConflict
+        | _ -> ()
+    let gitErrorFun e = 
+        handleGitErrorLine e
+        None
 
     let runAdvanced runFun args git wDir  = asyncTrace() {
         use gitProc = new ToolProcess(git, wDir, HandleGitArguments.toCommandLine(args))
@@ -220,7 +255,13 @@ module GitProcess =
         // Also note that you have to do this also on the other Run methods 
         // (which are currently not factored out into functions).
         return! runFun gitProc } 
-    let run = runAdvanced (fun p -> p.RunAsync())
+    let run = 
+        runAdvanced 
+            (fun p -> 
+                p.RunWithErrorOutputAsync(
+                    (fun _ -> None), 
+                    gitErrorFun) 
+                |> AsyncTrace.Ignore)
 
     /// Runs a git progress command (fetch or push)
     let runGitProgressCommand onProcessChange = 
@@ -233,6 +274,7 @@ module GitProcess =
                     gitProc.RunWithErrorOutputAsync(
                         (fun o -> Option.None), 
                         fun e ->
+                            handleGitErrorLine e
                             if not (System.String.IsNullOrEmpty(e)) then 
                                 let matching = progressRegex.Match(e)
                                 if (matching.Success) then
@@ -245,11 +287,16 @@ module GitProcess =
                                                 else
                                                 1.0 - compressingPart))
                             Option.None) |> AsyncTrace.Ignore))
-        
+    let onlyOutput t = asyncTrace() {
+            let! fst, snd = t
+            return fst
+        }
     /// Runs git status
     let status = 
         runAdvanced 
-            (fun gitProc -> gitProc.RunWithOutputAsync (HandleGitData.parseStatusLine >> Some)) 
+            (fun gitProc -> 
+                gitProc.RunWithErrorOutputAsync((HandleGitData.parseStatusLine >> Some), gitErrorFun)
+                |> onlyOutput) 
             Status
     /// Runs git status and waits for it to finish
     let statusSync git wDir = 
@@ -261,10 +308,12 @@ module GitProcess =
     let lsRemote uri branch = 
         runAdvanced 
             (fun gitProc -> asyncTrace() {
-                let! output = gitProc.RunWithOutputAsync(fun l -> 
-                    if (System.String.IsNullOrEmpty(l)) then Option.None
-                    else Option.Some l
-                    )
+                let! output = 
+                    gitProc.RunWithErrorOutputAsync(
+                        (fun l -> 
+                            if (System.String.IsNullOrEmpty(l)) then Option.None
+                            else Option.Some l),
+                        gitErrorFun) |> onlyOutput
 
                 return output.[0].Substring(0,40) }) 
             (Ls_remote(uri,branch))
@@ -281,20 +330,22 @@ module GitProcess =
     let branch types = 
         runAdvanced 
             (fun gitProc ->
-                gitProc.RunWithOutputAsync(fun l ->
-                    if (System.String.IsNullOrEmpty(l)) then Option.None
-                    else
-                        Option.Some {
-                            IsSelected = (l.[0] = '*');
-                            Name = l.Substring(2) 
-                        }))
+                gitProc.RunWithErrorOutputAsync(
+                    (fun l ->
+                        if (System.String.IsNullOrEmpty(l)) then Option.None
+                        else
+                            Option.Some {
+                                IsSelected = (l.[0] = '*');
+                                Name = l.Substring(2) 
+                            }),
+                    gitErrorFun) |> onlyOutput)
             (Branch(types))
         
     /// Runs git remote
     let remote types = 
         runAdvanced
             (fun gitProc ->
-                gitProc.RunWithOutputAsync(fun l ->
+                gitProc.RunWithErrorOutputAsync((fun l ->
                     if l = null || l.Length = 0 
                     then Option.None
                     else
@@ -310,7 +361,8 @@ module GitProcess =
                                 if items.[2].Contains("fetch") 
                                 then Fetch
                                 else Push
-                        }))
+                        }),
+                    gitErrorFun) |> onlyOutput)
                 (Remote(types))
     /// Runs git fetch
     let fetch url branch onProcessChange = 

@@ -20,6 +20,8 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
         folder.Additional
             |> RemoteConnectionManager.extractRemoteConnectionData
             |> RemoteConnectionManager.calculateMergedEvent
+            |> x.SetTrace
+            |> Async.RunSynchronously
 
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()

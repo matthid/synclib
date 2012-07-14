@@ -92,6 +92,10 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
                     globalTracer.logCrit "Mailbox crashed: %s" (e.ToString())
                     syncError.Trigger e)
 
+    /// Helper method to allow tracing in child classes
+    member x.SetTrace work = 
+        work |> AsyncTrace.SetTracer globalTracer
+
     /// Requests a UpSync Operation
     member x.RequestSyncUp () = 
         globalTracer.logVerb "SyncUp requested"
@@ -102,6 +106,7 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
         globalTracer.logVerb "SyncDown requested"
         processor.Post(DoSyncDown)
 
+    /// Generates a unified commit message for the given files
     member x.GenerateCommitMessage (files:CommitMessageFile seq) = 
         let commitMessage =
             files

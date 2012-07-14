@@ -16,10 +16,10 @@ open System
 open Gtk
 open System.IO
 open Mono.Unix
-
+open Yaaf.AsyncTrace
 
 module Scripting = 
-    
+    let scriptTrace = Logging.DefaultTracer (Logging.Source "Yaaf.SyncLib.Ui.Scripting") "ScriptingRun"
     module private InterOp =
         [<System.Runtime.InteropServices.DllImport("user32.dll")>]
         extern bool ShowWindow(nativeint hWnd, int flags)
@@ -46,52 +46,67 @@ module Scripting =
         CustomManager
             backend
             info
+    let doOnGdk f = 
+        try
+            Gdk.Threads.Enter()
+            f()
+        finally
+            Gdk.Threads.Leave()
 
     let RunGui (managers:(ManagedFolderInfo * IManagedFolder) list)  =
-        Application.Init()
-        catalogInit "Yaaf.SyncLib.Ui" "./lang"
-        let icon = StatusIcon.NewFromStock(Stock.Info)
-        icon.Tooltip <- CString "Update Notification Icon"
-        //icon.set_FromFile(
+        try
+            GLib.Thread.Init(); // .NET needs that...
+            Gdk.Threads.Init ();
+            Gtk.Application.Init ();
+            catalogInit "Yaaf.SyncLib.Ui" "./lang"
+            let icon = StatusIcon.NewFromStock(Stock.Info)
+            icon.Tooltip <- CString "Update Notification Icon"
+            //icon.set_FromFile(
 
-        let menu = new Menu() 
-        let quitItem = new ImageMenuItem(CString "Quit")
+            let menu = new Menu() 
+            let quitItem = new ImageMenuItem(CString "Quit")
 
-        quitItem.Image <- new Image(Stock.Quit, IconSize.Menu)
+            quitItem.Image <- new Image(Stock.Quit, IconSize.Menu)
         
-        icon.PopupMenu 
-            |> Event.add (fun args -> 
-                    menu.Popup(null, null, new MenuPositionFunc(fun menu x y push_in -> StatusIcon.PositionMenu(menu, ref x, ref y, ref push_in, icon.Handle)), 0u, Global.CurrentEventTime);
-                    GtkUtils.bringToForeground()
-                )
+            icon.PopupMenu 
+                |> Event.add (fun args -> 
+                        menu.Popup(null, null, new MenuPositionFunc(fun menu x y push_in -> StatusIcon.PositionMenu(menu, ref x, ref y, ref push_in, icon.Handle)), 0u, Global.CurrentEventTime);
+                        GtkUtils.bringToForeground()
+                    )
 
-        quitItem.Activated
-            |> Event.add (fun args -> 
-                    Application.Quit()    
-                )
+            quitItem.Activated
+                |> Event.add (fun args -> 
+                        Application.Quit()    
+                    )
         
-        for info, manager in managers do
+            for info, manager in managers do
             
-            let managerItem = new ImageMenuItem(CString info.Name)
+                let managerItem = new ImageMenuItem(CString info.Name)
             
-            managerItem.Image <- new Image(Stock.Directory, IconSize.Menu)
-            managerItem.Activated
-                |> Event.add (fun args ->
-                        System.Diagnostics.Process.Start(info.FullPath) |> ignore)
-            manager.SyncError
-                |> Event.add (fun error ->
-                        use md = new MessageDialog (null, DialogFlags.Modal, MessageType.Info, ButtonsType.Ok, sprintf "Error: %s" (error.ToString()))
-                        md.Run () |> ignore
-                        md.Destroy())
+                managerItem.Image <- new Image(Stock.Directory, IconSize.Menu)
+                managerItem.Activated
+                    |> Event.add (fun args ->
+                            System.Diagnostics.Process.Start(info.FullPath) |> ignore)
+                manager.SyncError
+                    |> Event.add (fun error ->
+                            try
+                            doOnGdk (fun _ ->
+                                use md = new MessageDialog (null, DialogFlags.Modal, MessageType.Info, ButtonsType.Ok, sprintf "Error: %s" (error.ToString()))
+                                md.Run () |> ignore
+                                md.Destroy())
+                            with exn -> scriptTrace.logErr "Error in MessageDialog %O" exn
+                                )
             
-            menu.Add(managerItem)
-            manager.StartService()
+                menu.Add(managerItem)
+                manager.StartService()
         
-        menu.Add(quitItem)
-        menu.ShowAll() 
-        Application.Run()
+            menu.Add(quitItem)
+            menu.ShowAll() 
+            doOnGdk (fun _ ->
+                Application.Run())
 
-        for info, manager in managers do manager.StopService()
+            for info, manager in managers do manager.StopService()
+        with exn -> scriptTrace.logCrit "Error in RunGui %O" exn
 
     // This is maybe a solution for future version to make logging possible via script file
     // For now just copy the fsi.exe and create a fsi.exe.config

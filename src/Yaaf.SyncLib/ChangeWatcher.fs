@@ -6,6 +6,7 @@ namespace Yaaf.SyncLib
 
 open Yaaf.SyncLib.Helpers
 open Yaaf.SyncLib.PubsubImplementation
+open Yaaf.AsyncTrace
 
 /// Opt in Api to watch local changes, will trigger on any folder changes on the given folder
 type SimpleLocalChangeWatcher(folder : string, onError)  = 
@@ -149,13 +150,18 @@ module RemoteConnectionManager =
     /// Will calculate a merged event for all available remote data server
     let calculateMergedEvent =
         let nonEvent = new Event<unit>()     
-        (fun (folder:RemoteConnectionType seq) ->
-            folder
-            |> Seq.map remoteDataToEvent
-            |> Seq.fold
-                (fun state item ->
-                    state |> Event.merge item)
-                nonEvent.Publish)
+        (fun (folder:RemoteConnectionType seq) -> asyncTrace() {
+            let! (tracer:ITracer) = AsyncTrace.TraceInfo()
+            let count, event =
+                folder
+                |> Seq.map remoteDataToEvent
+                |> Seq.fold
+                    (fun (i,state) item ->
+                        i+1, state |> Event.merge item)
+                    (0, nonEvent.Publish)
+            if count = 0 then tracer.logWarn "No remote connectiondata! Automatic Remote Updates will be disabled!"
+            return event
+        })
 
 
 

@@ -23,6 +23,8 @@ type ManagedFolderInfo(name:string, path:string, remote:string, dict:System.Coll
 type SyncConflict = 
     /// Indicates a conflict in the merge process of the given file
     | MergeConflict of string
+    /// Indicates that a file is locked
+    | FileLocked of string
     /// Another unknown conflict
     | Unknown of string
 

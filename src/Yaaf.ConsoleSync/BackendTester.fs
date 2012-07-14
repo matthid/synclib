@@ -19,6 +19,7 @@ let addManagerEvents (manager:IManagedFolder) =
             (fun conf -> 
                 match conf with
                 | SyncConflict.MergeConflict(file) -> printfn "Solving conflict for file %s" file
+                | SyncConflict.FileLocked(file) -> printfn "A file is locked! %s" file
                 | SyncConflict.Unknown(s) -> printfn "Unknown Conflict: %s" s)
 
     manager.SyncError

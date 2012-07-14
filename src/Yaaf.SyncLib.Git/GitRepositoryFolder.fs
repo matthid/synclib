@@ -19,6 +19,8 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
         folder.Additional
             |> RemoteConnectionManager.extractRemoteConnectionData
             |> RemoteConnectionManager.calculateMergedEvent
+            |> x.SetTrace
+            |> Async.RunSynchronously
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()
     let remoteName = "synclib"
@@ -64,8 +66,49 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
             remote.Substring(0, remote.IndexOf('/'))
             
 
+
+
+    /// Adds all files to the index and does a commit to the repro
+    let commitAllChanges() = asyncTrace() {
+        let! (t:ITracer) = AsyncTrace.TraceInfo()
+        t.logVerb "Commiting All Changes in %s" folder.Name
+        // Add all files
+        do! GitProcess.add (GitAddType.All) ([]) |> run
+        // procude a commit message
+        let! changes = GitProcess.status |> run
+        let normalizedChanges =
+            changes
+                // filter only required changes
+                |> Seq.filter (fun f -> match f.Local.Status with
+                                            | GitStatusType.Added | GitStatusType.Modified
+                                            | GitStatusType.Deleted | GitStatusType.Renamed -> true
+                                            | _ -> false)
+                // map to base class format
+                |> Seq.map  
+                    (fun f -> 
+                        { 
+                        ChangeType = 
+                            match f.Local.Status with
+                            | GitStatusType.Added -> CommitMessageChangeType.Added
+                            | GitStatusType.Modified -> CommitMessageChangeType.Updated
+                            | GitStatusType.Deleted -> CommitMessageChangeType.Deleted
+                            | GitStatusType.Renamed -> CommitMessageChangeType.Renamed
+                            | _ -> failwith "GIT: got a status that was already filtered"
+                        FilePath = f.Local.Path
+                        FilePathRename = f.Server.Path
+                        })
+       
+        
+        let commitMessage = 
+             x.GenerateCommitMessage normalizedChanges
+
+        if changes.Count > 0 then
+            // Do the commit
+            do! GitProcess.commit (commitMessage) |> run
+    }
+
     /// Resolves Conflicts and 
-    let resolveConflicts() = asyncTrace() {
+    let rec resolveConflicts() = asyncTrace() {
         let! (t:ITracer) = AsyncTrace.TraceInfo()
         t.logVerb "Resolving GIT Conflicts in %s" folder.Name
         let! fileStatus = GitProcess.status |> run
@@ -98,46 +141,12 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                 do! GitProcess.add (GitAddType.NoOptions) ([f.Local.Path]) |> run
             
         do! GitProcess.add (GitAddType.All) ([]) |> run
-
-        // Here should be no more conflicts
-        // TODO: Check if there are and throw exception if there are
-    }
-
-    /// Adds all files to the index and does a commit to the repro
-    let commitAllChanges() = asyncTrace() {
-        let! (t:ITracer) = AsyncTrace.TraceInfo()
-        t.logVerb "Commiting All Changes in %s" folder.Name
-        // Add all files
-        do! GitProcess.add (GitAddType.All) ([]) |> run
-        // procude a commit message
-        let! changes = GitProcess.status |> run
-        let normalizedChanges =
-            changes
-                |> Seq.filter (fun f -> match f.Local.Status with
-                                            | GitStatusType.Added | GitStatusType.Modified
-                                            | GitStatusType.Deleted | GitStatusType.Renamed -> true
-                                            | _ -> false)
-                |> Seq.map  
-                    (fun f -> 
-                        { 
-                        ChangeType = 
-                            match f.Local.Status with
-                            | GitStatusType.Added -> CommitMessageChangeType.Added
-                            | GitStatusType.Modified -> CommitMessageChangeType.Updated
-                            | GitStatusType.Deleted -> CommitMessageChangeType.Deleted
-                            | GitStatusType.Renamed -> CommitMessageChangeType.Renamed
-                            | _ -> failwith "GIT: got a status that was already filtered"
-                        FilePath = f.Local.Path
-                        FilePathRename = f.Server.Path
-                        })
-       
-
-        let commitMessage = 
-             x.GenerateCommitMessage normalizedChanges
-
-        if changes.Count > 0 then
-            // Do the commit
-            do! GitProcess.commit (commitMessage) |> run
+        try
+            do! GitProcess.rebase Continue |> run
+        with
+            | GitMergeConflict ->
+                t.logWarn "still conflicts detected... trying to resolve"
+                do! resolveConflicts()
     }
 
     /// Initialize the repository
@@ -148,8 +157,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
         try
             do! GitProcess.status |> run |> AsyncTrace.Ignore
         with
-        | ToolProcessFailed(code, cmd, output, error) 
-            when error.Contains "fatal: Not a git repository (or any of the parent directories): .git" ->
+            | GitNoRepository ->
                 t.logWarn "%s is no GIT Repro so init one" folder.Name
                 do! GitProcess.init |> run
                 
@@ -204,21 +212,26 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                 t.logInfo "Starting GIT SyncDown-Merging of %s" folder.Name
                 do! GitProcess.rebase (Start("FETCH_HEAD", "master")) |> run
             with
-                | ToolProcessFailed(exitCode, cmd, o, e) ->
-                    match e with
-                    | Contains "fatal: no such branch: master" ->
-                        repairMasterBranch()
-                        x.RequestSyncDown()
-                    | _ ->
-                        let errorMsg = (sprintf "Cmd: %s, Code: %d, Output: %s, Error %s" cmd exitCode o e)
-                        t.logWarn "Conflict while Down-Merging of %s: %s" folder.Name errorMsg
-                        // Conflict
-                        syncConflict.Trigger (SyncConflict.Unknown errorMsg)
-                    
-                        // Resolve conflict
-                        // TODO: Catch only required exception and retrow all others 
-                        do! resolveConflicts()
-                        x.RequestSyncDown()
+                | GitMergeConflict ->
+                    t.logWarn "conflicts detected... trying to resolve"
+                    do! resolveConflicts()
+                | GitUnstagedChanges ->
+                    t.logWarn "unstaged changes"
+                    x.RequestSyncDown()
+                | GitNoMasterBranch ->
+                    t.logWarn "fixing no master branch"
+                    repairMasterBranch()
+                    x.RequestSyncDown()
+                | GitPermissionDenied (file) ->
+                    t.logWarn "Waiting for filepermission"
+                    syncConflict.Trigger (SyncConflict.FileLocked(file))
+                    do! GitProcess.rebase Abort |> run
+                    do! Async.Sleep 2000 |> AsyncTrace.FromAsync
+                    x.RequestSyncDown() // try again
+                | GitStuckRebase ->
+                    t.logErr "Noticed an invalid state"
+                    do! GitProcess.rebase Abort |> run
+                    x.RequestSyncDown() // try again
         finally 
             progressChanged.Trigger 1.0
     }
@@ -239,21 +252,15 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                 |> run   
             progressChanged.Trigger 1.0
         with 
-            | ToolProcessFailed(exitCode, cmd, o ,e) ->
-                match e with
-                | Contains "error: src refspec master does not match any" -> 
-                    // No Master Branch
-                    repairMasterBranch()
-                    x.RequestSyncUp()
-                | _ ->
-                    // Conflict
-                    // TODO: Catch only required exception and retrow all others 
-                    let errorMsg = (sprintf "Cmd: %s, Code: %d, Output: %s, Error %s" cmd exitCode o e)
-                    t.logWarn "Conflict while Sync-Up of %s: %s" folder.Name errorMsg
-                    
-                    syncConflict.Trigger (SyncConflict.Unknown errorMsg)
-                    x.RequestSyncDown() // We handle conflicts there
-                    x.RequestSyncUp()
+            | GitNoMasterBranch -> 
+                t.logWarn "fixing no master branch (on syncup)"
+                // No Master Branch
+                repairMasterBranch()
+                x.RequestSyncUp()               
+            | GitRejected ->
+                t.logWarn "Push was rejected trying to syncdown"
+                x.RequestSyncDown() // We handle conflicts there
+                x.RequestSyncUp()               
     }
 
     override x.StartSyncDown () = 
