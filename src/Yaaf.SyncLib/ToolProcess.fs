@@ -63,8 +63,25 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
             System.GC.SuppressFinalize(x)
 
     member x.Kill() = toolProcess.Kill()
-    member x.RunAsync() = 
+    member x.RunAsync() = x.RunWithOutputAsync((fun _ -> None)) |> AsyncTrace.Ignore
+            
+    member x.StandardInput
+        with get() = 
+            toolProcess.StandardInput
+            
+
+
+    member x.RunWithOutputAsync(lineReceived) = 
         asyncTrace() {
+            let! output, error = x.RunWithErrorOutputAsync(lineReceived, (fun _ -> None))
+            return output
+        }
+
+    member x.RunWithErrorOutputAsync(lineReceived, errorReceived) = 
+        asyncTrace() {
+            let errorData, errorExn = addReceiveEvent toolProcess.ErrorDataReceived errorReceived
+            let outputData, outputExn = addReceiveEvent toolProcess.OutputDataReceived lineReceived
+
             let! (t:ITracer) = traceInfo()
 
             // Collect error stream
@@ -102,34 +119,29 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
             // Should run only 1 time
             toolProcess.Close()
             toolProcess.Dispose()
+            
+            let getFailData ()= 
+                (!outputBuilder).ToString(),
+                (!errorBuilder).ToString(),
+                sprintf "%s> \"%s\" %s" workingDir processFile arguments
+
+            // Check if we already recognised an error
+            for e in [!errorExn;!outputExn] do
+                if (e <> null) then
+                    // Add all infos we have
+                    let output, error, failedCmd = getFailData()
+                    e.Data.["Output"] <- output
+                    e.Data.["Error"] <- error
+                    e.Data.["ExitCode"] <- exitCode
+                    e.Data.["Cmd"] <- failedCmd
+                    t.logErr "ToolProcess custom fail!\n\tCommand Line (exited with %d): %s\n\tCustomExn: %A\n\tOutput: %s\n\tError: %s" exitCode e failedCmd output error
+                    raise e
 
             // Check exitcode
             if exitCode <> 0 then 
-                let failedCmd = sprintf "%s> \"%s\" %s" workingDir processFile arguments
-                let output = (!outputBuilder).ToString()
-                let error = (!errorBuilder).ToString()
+                let output, error, failedCmd = getFailData()
                 t.logErr "ToolProcess failed!\n\tCommand Line (exited with %d): %s\n\tOutput: %s\n\tError: %s" exitCode failedCmd output error
                 raise (ToolProcessFailed (exitCode, failedCmd, output, error))
-        }
-            
-    member x.StandardInput
-        with get() = 
-            toolProcess.StandardInput
-            
 
-
-    member x.RunWithOutputAsync(lineReceived) = 
-        asyncTrace() {
-            let c, customExn = addReceiveEvent toolProcess.OutputDataReceived  lineReceived
-            do! x.RunAsync()
-            if (!customExn <> null) then raise !customExn
-            return c
-        }
-
-    member x.RunWithErrorOutputAsync(lineReceived, errorReceived) = 
-        asyncTrace() {
-            let c, customExn = addReceiveEvent toolProcess.ErrorDataReceived errorReceived
-            let! output = x.RunWithOutputAsync(lineReceived)            
-            if (!customExn <> null) then raise !customExn
-            return output, c
+            return outputData, errorData
         }
