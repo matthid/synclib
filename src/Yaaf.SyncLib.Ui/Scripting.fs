@@ -47,16 +47,10 @@ module Scripting =
             backend
             info
     let doOnGdk f = 
-        try
-            Gdk.Threads.Enter()
-            f()
-        finally
-            Gdk.Threads.Leave()
+        Gtk.Application.Invoke(fun sender args -> f())
 
     let RunGui (managers:(ManagedFolderInfo * IManagedFolder) list)  =
         try
-            GLib.Thread.Init(); // .NET needs that...
-            Gdk.Threads.Init ();
             Gtk.Application.Init ();
             catalogInit "Yaaf.SyncLib.Ui" "./lang"
             let icon = StatusIcon.NewFromStock(Stock.Info)
@@ -102,8 +96,7 @@ module Scripting =
         
             menu.Add(quitItem)
             menu.ShowAll() 
-            doOnGdk (fun _ ->
-                Application.Run())
+            Application.Run()
 
             for info, manager in managers do manager.StopService()
         with exn -> scriptTrace.logCrit "Error in RunGui %O" exn
