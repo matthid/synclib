@@ -7,8 +7,7 @@ namespace Yaaf.SyncLib.Git
 open System.Diagnostics
 open System.IO
 open Yaaf.SyncLib
-open Yaaf.SyncLib.Helpers
-open Yaaf.SyncLib.Helpers.AsyncTrace
+open Yaaf.AsyncTrace
 
 type BranchType = 
     | Local
@@ -207,13 +206,49 @@ module HandleGitData =
             Local = { Status = s1; Path = p1}; 
             Server = { Status = s2; Path = p2}
         }
-
+/// Permission of the given file was denied (can be "unknown filename") 
+exception GitPermissionDenied of string
+/// Push was rejected
+exception GitRejected
+/// We are stuck on rebase (git tells us to run --abort, --continue or --skip)
+exception GitStuckRebase
+/// We have no master Branch (can happen when we have no initial commit)
+exception GitNoMasterBranch
+/// We are not in a git repository
+exception GitNoRepository
+/// Unstaged changes
+exception GitUnstagedChanges
+/// Git merge conflict
+exception GitMergeConflict
+/// Manages the git process
 module GitProcess = 
-    let createGitProc (gitPath:string) (workingDir:string) (args:GitArguments) = 
-        new ToolProcess(gitPath, workingDir, HandleGitArguments.toCommandLine(args))
+    let tracer = new TraceSource("Yaaf.SyncLib.Git.GitProcess")
+    let handleGitErrorLine l = 
+        match l with
+        // unable to unlink old 'Microsoft Word Document (neu).docx' (Permission denied)
+        | StartsWith "error: unable to unlink old '" rest when l.Contains("Permission denied") ->
+            let endFileName = rest.IndexOf("'")
+            let fileName =
+                if (endFileName <> -1) then rest.Substring(0, endFileName)
+                else "unknown filename"
+            raise (GitPermissionDenied(fileName))
+        | Contains "Permission denied" -> raise (GitPermissionDenied("unknown filename"))
+        | Contains "! [rejected]" -> raise GitRejected
+        | Contains "git rebase (--continue | --abort | --skip)" -> raise GitStuckRebase
+        | Contains "fatal: no such branch: master" 
+        | Contains "error: src refspec master does not match any"-> raise GitNoMasterBranch
+        | Contains "fatal: Not a git repository (or any of the parent directories): .git"-> raise GitNoRepository
+        | Contains "Cannot rebase: You have unstaged changes."-> raise GitUnstagedChanges
+        | Contains "Cannot merge"-> raise GitMergeConflict
+        | Contains "ssh: connect to host localdevserver port 22: Bad file number"-> raise OfflineException
+        | Contains "fatal: The remote end hung up unexpectedly"-> raise (ConnectionException l)
+        | _ -> ()
+    let gitErrorFun e = 
+        handleGitErrorLine e
+        None
 
-    let run git wDir status = asyncTrace() {
-        use gitProc = createGitProc git wDir status
+    let runAdvanced runFun args git wDir  = asyncTrace() {
+        use gitProc = new ToolProcess(git, wDir, HandleGitArguments.toCommandLine(args))
         // NOTE: it can happen that the git process gets stuck!
         // This usually indicates that we got a "The remote end hang up unexpectedly"
         // A possible fix would be to add a timeout option to the ToolProcess and 
@@ -221,86 +256,98 @@ module GitProcess =
         // (or even better the whole process tree from the bottom up
         // Also note that you have to do this also on the other Run methods 
         // (which are currently not factored out into functions).
-        do! gitProc.RunAsync() }
+        return! runFun gitProc } 
+    let run = 
+        runAdvanced 
+            (fun p -> 
+                p.RunWithErrorOutputAsync(
+                    (fun _ -> None), 
+                    gitErrorFun) 
+                |> AsyncTrace.Ignore)
 
-    let runGitProgressCommand(gitProc:ToolProcess, onProcessChange) = 
-        asyncTrace() {
+    /// Runs a git progress command (fetch or push)
+    let runGitProgressCommand onProcessChange = 
             let progressRegex = 
                 new System.Text.RegularExpressions.Regex (
                     @"([0-9]+)%", 
-                    System.Text.RegularExpressions.RegexOptions.Compiled);
-            return!
-                gitProc.RunWithErrorOutputAsync((fun o -> Option.None), fun e ->
-                    if not (System.String.IsNullOrEmpty(e)) then 
-                        let matching = progressRegex.Match(e)
-                        if (matching.Success) then
-                            let progress = System.Double.Parse(matching.Groups.[1].Value) / 100.0
-                            let compressingPart = 0.25;
-                            onProcessChange
-                                (progress * 
-                                    (if (e.StartsWith("Compressing")) then
-                                        compressingPart
-                                     else
-                                        1.0 - compressingPart))
-                    Option.None
-                )
+                    System.Text.RegularExpressions.RegexOptions.Compiled)
+            runAdvanced(
+                (fun (gitProc:ToolProcess) -> 
+                    gitProc.RunWithErrorOutputAsync(
+                        (fun o -> Option.None), 
+                        fun e ->
+                            handleGitErrorLine e
+                            if not (System.String.IsNullOrEmpty(e)) then 
+                                let matching = progressRegex.Match(e)
+                                if (matching.Success) then
+                                    let progress = System.Double.Parse(matching.Groups.[1].Value) / 100.0
+                                    let compressingPart = 0.25;
+                                    onProcessChange
+                                        (progress * 
+                                            (if (e.StartsWith("Compressing")) then
+                                                compressingPart
+                                                else
+                                                1.0 - compressingPart))
+                            Option.None) |> AsyncTrace.Ignore))
+    let onlyOutput t = asyncTrace() {
+            let! fst, snd = t
+            return fst
         }
-    let RunGitStatusAsync git wDir = 
-        asyncTrace() {
-            use gitProc = createGitProc git wDir Status
-            return!
-                gitProc.RunWithOutputAsync (HandleGitData.parseStatusLine >> Some) 
-        }
-
-    let RunGitStatus git wDir = 
-        RunGitStatusAsync git wDir
-            |> convertToAsync
+    /// Runs git status
+    let status = 
+        runAdvanced 
+            (fun gitProc -> 
+                gitProc.RunWithErrorOutputAsync((HandleGitData.parseStatusLine >> Some), gitErrorFun)
+                |> onlyOutput) 
+            Status
+    /// Runs git status and waits for it to finish
+    let statusSync git wDir = 
+        status git wDir
+            |> AsyncTrace.SetTracer (Logging.DefaultTracer tracer "Running Git Status")
             |> Async.RunSynchronously
 
-    let RunGitLsRemoteAsync git wDir uri branch = 
-        asyncTrace() {
-            use gitProc = createGitProc git wDir (Ls_remote(uri, branch))
-            let! output = gitProc.RunWithOutputAsync(fun l -> 
-                if (System.String.IsNullOrEmpty(l)) then Option.None
-                else Option.Some l
-                )
+    /// runs git ls-remote
+    let lsRemote uri branch = 
+        runAdvanced 
+            (fun gitProc -> asyncTrace() {
+                let! output = 
+                    gitProc.RunWithErrorOutputAsync(
+                        (fun l -> 
+                            if (System.String.IsNullOrEmpty(l)) then Option.None
+                            else Option.Some l),
+                        gitErrorFun) |> onlyOutput
 
-            return output.[0].Substring(0,40)
-        }
-
-    let RunGitLsRemote git wDir uri branch = 
-        RunGitLsRemoteAsync git wDir uri branch
-            |> convertToAsync
+                return output.[0].Substring(0,40) }) 
+            (Ls_remote(uri,branch))
+        
+    /// Runs git --ls-remote synchronous
+    let lsRemoteSync uri branch git wDir  = 
+        lsRemote uri branch git wDir
+            |> AsyncTrace.SetTracer (Logging.DefaultTracer tracer "Running Git Ls Remote")
             |> Async.RunSynchronously
       
-
-    let RunGitInitAsync git wDir = 
-        asyncTrace() {
-            use gitProc = createGitProc git wDir Init
-            do! gitProc.RunAsync()
-            return ()
-        }
-
-    let RunGitBranchAsync git wDir types = 
-        asyncTrace() {
-            use gitProc = createGitProc  git wDir (Branch(types))
-            return!
-                gitProc.RunWithOutputAsync(fun l ->
-                    if (System.String.IsNullOrEmpty(l)) then Option.None
-                    else
-                        Option.Some {
-                            IsSelected = (l.[0] = '*');
-                            Name = l.Substring(2) 
-                        }
-                )
-        }
-
-    let RunGitRemoteAsync git wDir types = 
-        asyncTrace() {
-            use gitProc = createGitProc  git wDir (Remote(types))
-            
-            return!
-                gitProc.RunWithOutputAsync(fun l ->
+    /// Runs git init
+    let init = run Init
+    /// Runs git branch
+    let branch types = 
+        runAdvanced 
+            (fun gitProc ->
+                gitProc.RunWithErrorOutputAsync(
+                    (fun l ->
+                        if (System.String.IsNullOrEmpty(l)) then Option.None
+                        else
+                            Option.Some {
+                                IsSelected = (l.[0] = '*');
+                                Name = l.Substring(2) 
+                            }),
+                    gitErrorFun) |> onlyOutput)
+            (Branch(types))
+        
+    /// Runs git remote
+    let remote types = 
+        runAdvanced
+            (fun gitProc ->
+                gitProc.RunWithErrorOutputAsync((fun l ->
                     if l = null || l.Length = 0 
                     then Option.None
                     else
@@ -316,38 +363,25 @@ module GitProcess =
                                 if items.[2].Contains("fetch") 
                                 then Fetch
                                 else Push
-                        }
-                )
-        }
-    
-    let RunGitFetchAsync git wDir url branch onProcessChange = 
-        asyncTrace() {
-            use gitProc = createGitProc  git wDir (GitArguments.Fetch(url, branch))
-            do! runGitProgressCommand(gitProc, onProcessChange) |> AsyncTrace.Ignore
-        }
-
-    let RunGitRebaseAsync git wDir rebaseType = 
-        asyncTrace() {
-            do! run  git wDir (GitArguments.Rebase(rebaseType))
-        }
-
-    let RunGitAddAsync git wDir addOption files = 
-        asyncTrace() {
-            do! run  git wDir (GitArguments.Add(addOption, files))
-        }
-
-    let RunGitCommitAsync git wDir message = 
-        asyncTrace() {
-            do! run  git wDir (GitArguments.Commit(message))
-        }
-
-    let RunGitPushAsync git wDir url branch onProcessChange = 
-        asyncTrace() {
-            use gitProc = createGitProc git wDir (GitArguments.Push(url, branch))
-            do! runGitProgressCommand(gitProc, onProcessChange) |> AsyncTrace.Ignore
-        }
-    let RunGitCheckoutAsync git wDir checkoutType = 
-        asyncTrace() {
-            do! run git wDir (GitArguments.Checkout(checkoutType))
-        }
+                        }),
+                    gitErrorFun) |> onlyOutput)
+                (Remote(types))
+    /// Runs git fetch
+    let fetch url branch onProcessChange = 
+        runGitProgressCommand onProcessChange (GitArguments.Fetch(url, branch))
+    /// Runs git rebase
+    let rebase rebaseType = 
+        run (GitArguments.Rebase(rebaseType))
+    /// Runs git add
+    let add addOption files = 
+        run (GitArguments.Add(addOption, files))
+    /// Runs git commit
+    let commit message = 
+        run (GitArguments.Commit(message))
+    /// Runs git push
+    let push url branch onProcessChange = 
+        runGitProgressCommand onProcessChange (GitArguments.Push(url, branch))
+    /// Runs git checkout
+    let checkout checkoutType = 
+        run (GitArguments.Checkout(checkoutType))
 

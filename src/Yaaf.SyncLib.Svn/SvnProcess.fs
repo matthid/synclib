@@ -6,9 +6,7 @@ namespace Yaaf.SyncLib.Svn
 
 
 open Yaaf.SyncLib
-open Yaaf.SyncLib.Helpers
-open Yaaf.SyncLib.Helpers.AsyncTrace
-open Yaaf.SyncLib.Helpers.MatchHelper
+open Yaaf.AsyncTrace
 
 
 open System.Diagnostics
@@ -295,73 +293,76 @@ module HandleSvnData =
         | _ -> failwith "invalid svn info data received!"
 
 exception SvnNotWorkingDir
+exception SvnAlreadyLocked
 module SvnProcess = 
     let svnErrorFun error = 
         match error with
-        | ContainsAll ["warning: W155007: ";" is not a working copy"] -> raise SvnNotWorkingDir
-        | ContainsAll ["svn: E155007: "; " is not a working copy"] -> raise SvnNotWorkingDir
+        | ContainsAny ["E155007"; "W155007" ] -> raise SvnNotWorkingDir
+        | Contains "E175002" -> raise OfflineException
+        | Contains "E155004" -> raise SvnAlreadyLocked
         | _ -> Option.None
-    let checkout svn local remote = asyncTrace() {
-        let svnProc = new ToolProcess(svn, local, sprintf "checkout -r 0 \"%s\" ." remote)
-        do! svnProc.RunAsync() }
+
+    let runSvn rfun param svn local = asyncTrace() {
+        let svnProc = new ToolProcess(svn, local, param)
+        return! rfun(svnProc) 
+        }
+
+    let runSvnSimple = runSvn (fun proc -> proc.RunWithErrorOutputAsync((fun _ -> Option.None), svnErrorFun)|> AsyncTrace.Ignore)
+
+    let checkout remote = runSvnSimple (sprintf "checkout -r 0 \"%s\" ." remote)
         
-    let resolved svn local file = asyncTrace() {
-        let svnProc = new ToolProcess(svn, local, sprintf "resolved \"%s\"" file)
-        do! svnProc.RunAsync() }
+    let resolved file = runSvnSimple (sprintf "resolved \"%s\"" file)
 
-    let add svn local file = asyncTrace() {
-        let svnProc = new ToolProcess(svn, local, sprintf "add \"%s\"" file)
-        do! svnProc.RunAsync() }
+    let add file = runSvnSimple (sprintf "add \"%s\"" file)
         
-    let delete svn local file = asyncTrace() {
-        let svnProc = new ToolProcess(svn, local, sprintf "remove \"%s\"" file)
-        do! svnProc.RunAsync() }
+    let delete file = runSvnSimple (sprintf "remove \"%s\"" file)
 
-    let commit svn local message = asyncTrace() {
-        let svnProc = new ToolProcess(svn, local, sprintf "commit -m \"%s\"" message)
-        do! svnProc.RunAsync() }
+    let commit message = runSvnSimple (sprintf "commit -m \"%s\"" message)
+
+    let cleanup = runSvnSimple (sprintf "cleanup")
         
-    let status svn local = asyncTrace() {
-        let svnProc = new ToolProcess(svn, local, sprintf "status --show-updates")
-        let! output, error = 
-            svnProc.RunWithErrorOutputAsync(
-                (fun line -> 
-                    match line with
-                    /// Ignore last Line
-                    | Contains "Status against revision:" -> Option.None
-                    /// Parse Line
-                    | _ -> Some <| HandleSvnData.parseStatusLine line), 
-                svnErrorFun)
-        return output
-    }
+    let status = 
+        runSvn 
+            (fun svnProc -> asyncTrace() {
+                let! o, e =
+                    svnProc.RunWithErrorOutputAsync(
+                        (fun line -> 
+                            match line with
+                            /// Ignore last Line
+                            | Contains "Status against revision:" -> Option.None
+                            /// Parse Line
+                            | _ -> Some <| HandleSvnData.parseStatusLine line), 
+                        svnErrorFun)
+                return o })
+            (sprintf "status --show-updates")
 
-    let info svn local = asyncTrace() {
-        let svnProc = new ToolProcess(svn, local, sprintf "info")
-        let! output, error = 
-            svnProc.RunWithErrorOutputAsync(
-                (fun line ->
-                    match line with
-                    | Equals "" -> Option.None
-                    | _ -> Some <| line),
-                svnErrorFun)
-        
+    let info = 
+        runSvn 
+            (fun svnProc -> asyncTrace() {
+                let! o, e =
+                    svnProc.RunWithErrorOutputAsync(
+                        (fun line ->
+                            match line with
+                            | Equals "" -> Option.None
+                            | _ -> Some <| line),
+                        svnErrorFun)
+                        
+                let outputData = 
+                    HandleSvnData.parseInfoData o
 
-        let outputData = 
-            HandleSvnData.parseInfoData output
+                return outputData })
+            (sprintf "info")
 
-        return outputData
-    }
-
-    let update svn local receivedLine = asyncTrace() {
-        let svnProc = new ToolProcess(svn, local, sprintf "update")
-        do! svnProc.RunWithErrorOutputAsync(
-                (fun line ->
-                    if (line <> "") then  
-                        match line with 
-                        | StartsWith "Updating " rest -> () // "'.':"    
-                        | StartsWith "At revision " rest -> () // "133."    
-                        | _ -> line |> HandleSvnData.parseUpdateLine |> receivedLine
-                    Option.None),
-                svnErrorFun)
-            |> AsyncTrace.Ignore
-    }
+    let update receivedLine = 
+        runSvn 
+            (fun svnProc -> 
+                    svnProc.RunWithErrorOutputAsync(
+                        (fun line ->
+                            if (line <> "") then  
+                                match line with 
+                                | StartsWith "Updating " rest -> () // "'.':"    
+                                | StartsWith "At revision " rest -> () // "133."    
+                                | _ -> line |> HandleSvnData.parseUpdateLine |> receivedLine
+                            Option.None),
+                        svnErrorFun) |> AsyncTrace.Ignore)
+            (sprintf "update")

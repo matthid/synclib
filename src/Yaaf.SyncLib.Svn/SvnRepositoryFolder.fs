@@ -4,10 +4,9 @@
 // ----------------------------------------------------------------------------
 namespace Yaaf.SyncLib.Svn
 
+open Yaaf.AsyncTrace
+
 open Yaaf.SyncLib
-open Yaaf.SyncLib.Helpers
-open Yaaf.SyncLib.Helpers.AsyncTrace
-open Yaaf.SyncLib.Helpers.MatchHelper
 open Yaaf.SyncLib.Svn
 
 open System.IO
@@ -17,7 +16,12 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
     inherit RepositoryFolder(folder)
 
     let localWatcher = new SimpleLocalChangeWatcher(folder.FullPath, (fun err -> x.ReportError err))
-    let remoteWatcher = new RemoteChangeWatcher(folder)
+    let pushEvent, remoteEvent = 
+        folder.Additional
+            |> RemoteConnectionManager.extractRemoteConnectionData
+            |> RemoteConnectionManager.calculateMergedEvent
+            |> x.SetTrace
+            |> Async.RunSynchronously
 
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()
@@ -25,29 +29,44 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
     /// Indicates wheter this svn rep is initialized (ie requires special checks at startup)
     let mutable isInit = false
     let svnPath = folder.Additional.["svnpath"]
+    let invokeSvn f = f svnPath folder.FullPath
+    do
+        // Start watching
+        localWatcher.Changed
+            // Filter svn directory
+            |> Event.filter 
+                (fun (changeType, oldPath, newPath)-> 
+                    let gitPath = Path.Combine(folder.FullPath, ".svn")
+                    not (oldPath.StartsWith gitPath) && not (newPath.StartsWith gitPath))
+            // Reduce event
+            |> Event.reduceTime (System.TimeSpan.FromMinutes(1.0))
+            |> Event.add (fun args -> x.RequestSyncUp())
+
+        remoteEvent
+            |> Event.add x.RequestSyncDown
 
     let init() = asyncTrace() {
-        let! (t:ITracer) = AsyncTrace.traceInfo()
+        let! (t:ITracer) = traceInfo()
         t.logInfo "Init SVN Repro %s" folder.Name
         // Check if repro is initialized (ie is a git repro)
         try
-            do! SvnProcess.status svnPath (folder.FullPath) |> AsyncTrace.Ignore
+            do! SvnProcess.status |> invokeSvn |> AsyncTrace.Ignore
         with
         | SvnNotWorkingDir ->
             t.logWarn "%s is no SVN Repro so init it" folder.Name
-            do! SvnProcess.checkout svnPath folder.FullPath folder.Remote
+            do! SvnProcess.checkout folder.Remote |> invokeSvn
                 
                 
         
         // Check whether the remote url matches
-        let! svnInfo = SvnProcess.info svnPath (folder.FullPath)
+        let! svnInfo = SvnProcess.info |> invokeSvn
         if (svnInfo.Url <> folder.Remote) then failwith (invalidOp "SVN Url does not match!")
 
         isInit <- true
     }
 
     let resolveConflicts () = asyncTrace() {
-        let! items = SvnProcess.status svnPath (folder.FullPath)
+        let! items = SvnProcess.status |> invokeSvn
         let conflicting = 
             items
                 |> Seq.filter (fun item -> item.ChangeType = SvnStatusLineChangeType.ContentConflict)
@@ -88,54 +107,59 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
                 true)
 
             // Mark as solved 
-            do! SvnProcess.resolved svnPath folder.FullPath filePath
+            do! SvnProcess.resolved filePath |> invokeSvn
     }
 
     let syncDown() = asyncTrace() {
-        let! (t:ITracer) = AsyncTrace.traceInfo()
+        let! (t:ITracer) = traceInfo()
         progressChanged.Trigger 0.0
         try
             if not isInit then do! init()
 
             t.logInfo "Starting SVN Syncdown of %s" folder.Name
             /// counting the items to update
-            let! items = SvnProcess.status svnPath (folder.FullPath)
+            let! items = SvnProcess.status |> invokeSvn
             let updateItemsCount =
                 let t =
                     items
                         |> Seq.filter (fun item -> item.IsOutOfDate)
                         |> Seq.length
                 if t = 0 then 1.0 else float t
+            try
+                // Starting the update
+                let finishedFileCount = ref 0
+                let conflictFile = ref false
+                do! SvnProcess.update 
+                        (fun updateFinished ->
+                            match updateFinished with
+                            | FinishedFile(updateType, propType, file) ->
+                                match updateType with
+                                | SvnUpdateType.Conflicting -> 
+                                    syncConflict.Trigger (SyncConflict.Unknown (sprintf "file %s is conflicting" file))
+                                    conflictFile := true
+                                | _ -> ()
+                                finishedFileCount := !finishedFileCount + 1
+                                progressChanged.Trigger (0.95 * float (!finishedFileCount) / updateItemsCount)
+                            | _ -> ())
+                        |> invokeSvn
 
-            // Starting the update
-            let finishedFileCount = ref 0
-            let conflictFile = ref false
-            do! SvnProcess.update 
-                    svnPath 
-                    folder.FullPath
-                    (fun updateFinished ->
-                        match updateFinished with
-                        | FinishedFile(updateType, propType, file) ->
-                            match updateType with
-                            | SvnUpdateType.Conflicting -> 
-                                syncConflict.Trigger (SyncConflict.Unknown (sprintf "file %s is conflicting" file))
-                                conflictFile := true
-                            | _ -> ()
-                            finishedFileCount := !finishedFileCount + 1
-                            progressChanged.Trigger (0.95 * float (!finishedFileCount) / updateItemsCount)
-                        | _ -> ())
-
-            // Conflict resolution
-            if (!conflictFile) then
-                // Resolve conflict
-                do! resolveConflicts()
+                // Conflict resolution
+                if (!conflictFile) then
+                    // Resolve conflict
+                    do! resolveConflicts()
+            with
+                | SvnAlreadyLocked ->
+                    t.logWarn "Detected a SVN Workspace Lock"
+                    t.logInfo "Trying to resolve the lock"
+                    do! SvnProcess.cleanup |> invokeSvn
+                    x.RequestSyncDown() // Try again
         finally 
             progressChanged.Trigger 1.0
     }
 
     let syncUp() = asyncTrace() {
         // get status
-        let! items = SvnProcess.status svnPath (folder.FullPath)
+        let! items = SvnProcess.status |> invokeSvn
 
         // add all changes to svn
         for (toAdd, item) in items
@@ -146,7 +170,7 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
             let f =
                 if (toAdd) then SvnProcess.add else SvnProcess.delete
 
-            do! f svnPath folder.FullPath item
+            do! f item |> invokeSvn
 
         // Get commit message
         let normalizedChanges =
@@ -178,7 +202,9 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
             x.GenerateCommitMessage normalizedChanges
         
         // Do the commit
-        do! SvnProcess.commit svnPath folder.FullPath commitMessage
+        do! SvnProcess.commit commitMessage |> invokeSvn
+        // NOTE: Check it there was indeed something pushed
+        pushEvent.Trigger("svnupdate")
     }    
     
     override x.StartSyncDown () = 

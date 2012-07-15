@@ -7,7 +7,7 @@ namespace Yaaf.SyncLib
 open System.Threading.Tasks
 
 /// A simple info object to contain all the settings for a specific backend. Extensible over the IDictionary
-type ManagedFolderInfo(name:string, path:string, remote:string, backend:string, announcementUrl:string, dict:System.Collections.Generic.IDictionary<string,string>) = 
+type ManagedFolderInfo(name:string, path:string, remote:string, dict:System.Collections.Generic.IDictionary<string,string>) = 
     let dictCopy = new System.Collections.Generic.Dictionary<_,_>(dict) :> System.Collections.Generic.IDictionary<_,_>
     /// The name or key shown in the gui for the folder, has to be unique (possibly used by the backend)
     member x.Name = name
@@ -15,16 +15,17 @@ type ManagedFolderInfo(name:string, path:string, remote:string, backend:string, 
     member x.FullPath = path 
     /// The remote string for the folder (used by the backend)
     member x.Remote = remote
-    /// The backend for the folder (can used by the backend, for example to throw a exception, or allow subtypes)
-    member x.Backend = backend
-    /// A serverurl which can be listened to for changes (can be used by the backend)
-    member x.AnnouncementUrl = announcementUrl
     /// Additional settings to be extensible (other backends could have other configurations requirements)
+    /// The following are supported natively: "PubsubUrl" "PubsubChannel"
     member x.Additional = dictCopy
 
 /// The Type of Conflict that occured while syncing
 type SyncConflict = 
+    /// Indicates a conflict in the merge process of the given file
     | MergeConflict of string
+    /// Indicates that a file is locked
+    | FileLocked of string
+    /// Another unknown conflict
     | Unknown of string
 
 /// The state of the syncing process

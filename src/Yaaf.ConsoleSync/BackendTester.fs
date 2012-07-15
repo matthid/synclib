@@ -9,17 +9,7 @@ open Yaaf.SyncLib
 open Yaaf.SyncLib.Git
 
 // Create a manager for a specific folder
-let createManager (backendManager:IBackendManager) name folder server =
-    let manager =
-        backendManager.CreateFolderManager(
-            new ManagedFolderInfo(
-                name, 
-                folder,
-                server,
-                "git",
-                "",
-                new System.Collections.Generic.Dictionary<_,_>()))
-
+let addManagerEvents (manager:IManagedFolder) =
     // Listen to the events
     manager.ProgressChanged
         |> Event.add (fun p -> printfn "New Progress %s" (p.ToString()))
@@ -29,13 +19,14 @@ let createManager (backendManager:IBackendManager) name folder server =
             (fun conf -> 
                 match conf with
                 | SyncConflict.MergeConflict(file) -> printfn "Solving conflict for file %s" file
+                | SyncConflict.FileLocked(file) -> printfn "A file is locked! %s" file
                 | SyncConflict.Unknown(s) -> printfn "Unknown Conflict: %s" s)
 
     manager.SyncError
         |> Event.add
             (fun error -> 
                 match error with
-                | SshException(message, log) ->
+                | SshAuthException(message) ->
                     printfn "%s" message
                     printfn ">> Stopped the service!"
                     printfn ">> open a console and execute \"%s\" and if you are asked type \"yes\"" "ssh.exe git@yourserver"
@@ -47,5 +38,25 @@ let createManager (backendManager:IBackendManager) name folder server =
         |> Event.add
             (fun changed -> printfn "State changed: %s" (changed.ToString()))
 
+let start (myManagers:(ManagedFolderInfo*IManagedFolder) list) = 
+    
+    let managers = 
+        myManagers |> List.map snd
 
-    manager
+    managers 
+        |> List.iter addManagerEvents
+
+    // Start the service
+    for manager in managers do
+        manager.StartService()
+    printfn ">> Started, any key to exit the services"
+    System.Console.ReadLine() |> ignore
+
+    // Stop the service to no listen to the folder any longer (any running operations will be finished)
+    for manager in managers do
+        manager.StopService()
+
+    printfn ">> Stopped, any key to exit the program"
+
+    // You could start the service again if you want
+    System.Console.ReadLine() |> ignore
