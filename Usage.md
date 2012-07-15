@@ -29,8 +29,6 @@ The first lines are really only there to load the required dependencies and make
 open Yaaf.SyncLib
 open Yaaf.SyncLib.Ui
 open Yaaf.SyncLib.Ui.Scripting
-// Add some logging (just leave this line if you don't know what it does
-Helpers.AsyncTrace.globalTrace.Listeners.Add(new System.Diagnostics.XmlWriterTraceListener("log.svclog"))
 ```
 
 You really don't need to know exactly what these lines mean. 
@@ -38,7 +36,6 @@ But to give a quick explanation:
 - #I will add a directory to the list of searched directories for references
 - #r will add a reference to a library
 - open will open a namespace or module (very much like using in C# or import in Java)
-- The last line will be most likely removed in future versions and sets the logfile
 
 The next lines are more interesting:
 
@@ -69,7 +66,8 @@ let myManagers = [
     ]
 ```
 NOTE: Whitespace is important in F#. And Tabs are not allowed. 
-So if you don't know anything about F# I would recommend to write every repository on a new line (on one line)
+So if you don't know anything about F# I would recommend to write every repository on a new line (on one line). And use the corrent intendation!
+
 The "let myManagers = ..." part is really only assigning this list to the symbol myManagers.
 
 The last Line:
@@ -139,22 +137,57 @@ with dict you can initialize advanced configuration options the syntax is:
 ```
 The following values are possible:
 
-PubsubUrl -> url to a pubsub server, for example "tcp://notifications.sparkleshare.org:80"
-PubsubChannel -> the channelname for the repro (should be unique and the same for all syncing partners)
-ConflictStrategy -> 
-	* KeepLocal means we solve conflicts by keeping the local version and discarding the server version, this can work for you on repros with history like git and svn (because you can recover the old version if you need to)
-	* RenameServer means we rename the server version to a conflict-file
-	* RenameLocal means we rename the local version to a conflict-file
-	* Any other value will prevent the startup
-	* No value means "RenameLocal"
-OfflineRetryDelay -> the delay in secounds (eg "7.5") until we try to reconnect when synclib recognizes that a server is offline, default is "5.0". "0" means we do not try to reconnect.
-gitpath -> lets you setup the path to the git.exe/git. No value means that synclib will try to find a git executable
-sshpath -> lets you setup the path to a ssh.exe/ssh. No value means that synclib will try to find one. Note: synclib does _not_ force git to use this ssh file.
-svnpath -> lets you setup the path to the svn.exe/svn. No value means that synclib will try to find a svn executable
+<table>
+    <tr>
+        <td><b>Config-Value</b></td>
+        <td><b>Meaning</b></td>
+    </tr>
+    <tr>
+        <td>PubsubUrl</td>
+        <td>url to a pubsub server, for example "tcp://notifications.sparkleshare.org:80"</td>
+    </tr>
+    <tr>
+        <td>PubsubChannel</td>
+        <td>the channelname for the repro (should be unique and the same for all syncing partners)</td>
+    </tr>
+	<tr>
+		<td>ConflictStrategy</td>
+		<td>
+1.  KeepLocal means we solve conflicts by keeping the local version and discarding the server version, 
+this can work for you on repros with history like git and svn (because you can recover the old version if you need to).
+<br />
+2.  RenameServer means we rename the server version to a conflict-file
+<br />
+3.  RenameLocal means we rename the local version to a conflict-file
+<br />
+4.  Any other value will prevent the startup
+<br />
+5.  No value means "RenameLocal"
+</span>
+		</td>
+    </tr>
+    <tr>
+        <td>OfflineRetryDelay</td>
+        <td>the delay in secounds (eg "7.5") until we try to reconnect when synclib recognizes that a server is offline, default is "5.0". "0" means we do not try to reconnect.</td>
+    </tr>
+    <tr>
+        <td>gitpath</td>
+        <td>lets you setup the path to the git.exe/git. No value means that synclib will try to find a git executable.</td>
+    </tr>
+    <tr>
+        <td>sshpath</td>
+        <td>lets you setup the path to a ssh.exe/ssh. No value means that synclib will try to find one. Note: synclib does _not_ force git to use this ssh file.</td>
+    </tr>
+    <tr>
+        <td>svnpath</td>
+        <td>lets you setup the path to the svn.exe/svn. No value means that synclib will try to find a svn executable.</td>
+    </tr>
+</table>
 
-Note that not all values are used by all implementations
-git will _not_ use svnpath
-svn will _not_ use gitpath, sshpath, ConflictStrategy (currently it will always do RenameLocal)
+Note that not all values are used by all implementations.
+
+1.  git will _not_ use svnpath
+2.  svn will _not_ use gitpath, sshpath, ConflictStrategy (currently it will always do RenameLocal)
 
 ## Customize Icon
 
