@@ -112,12 +112,15 @@ module Scripting =
                         )
                 manager.SyncError
                     |> Event.add (fun error ->
+                            
                             try
                             doOnGdk (fun _ ->
+                                printfn "Trying to display: %A" error
                                 icon.Stock <- Stock.DialogError
                                 icon.Blinking <- true
-                                use md = new MessageDialog (null, DialogFlags.Modal, MessageType.Info, ButtonsType.Ok, sprintf "Error: %s" (error.ToString()))
-                                md.ShowAll()
+                                let md = new MessageDialog (null, DialogFlags.Modal, MessageType.Info, ButtonsType.Ok, false, "{0}", [| ((sprintf "Error: %A" error):>obj) |])
+                                md.UseMarkup <- false
+                                md.Run() |> ignore
                                 let myLog m = 
                                     printfn "%s" m; scriptTrace.logInfo "%s" m
                                 md.ButtonPressEvent    

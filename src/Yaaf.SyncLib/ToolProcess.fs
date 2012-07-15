@@ -13,6 +13,7 @@ exception ToolProcessFailed of int * string * string * string
 
 /// A simple wrapper for asyncronus process starting
 type ToolProcess(processFile:string, workingDir:string, arguments:string) =
+    
     let toolProcess = 
         new Process(
             StartInfo =
@@ -22,7 +23,7 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
                     RedirectStandardError = true,
                     RedirectStandardInput = true,
                     UseShellExecute = false,
-                    WorkingDirectory = workingDir,
+                    WorkingDirectory = System.IO.Path.GetFullPath(workingDir),
                     CreateNoWindow = true,
                     Arguments = arguments))
 
@@ -121,7 +122,7 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
             // Should run only 1 time
             toolProcess.Close()
             toolProcess.Dispose()
-            
+
             let getFailData ()= 
                 (!outputBuilder).ToString(),
                 (!errorBuilder).ToString(),

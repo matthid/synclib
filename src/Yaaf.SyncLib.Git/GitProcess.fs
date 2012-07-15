@@ -220,7 +220,8 @@ exception GitNoRepository
 exception GitUnstagedChanges
 /// Git merge conflict
 exception GitMergeConflict
-/// Manages the git process
+/// When git got an invalid working-dir
+exception GitInvalidWorkingDir
 module GitProcess = 
     let tracer = new TraceSource("Yaaf.SyncLib.Git.GitProcess")
     let handleGitErrorLine l = 
@@ -256,7 +257,17 @@ module GitProcess =
         // (or even better the whole process tree from the bottom up
         // Also note that you have to do this also on the other Run methods 
         // (which are currently not factored out into functions).
-        return! runFun gitProc } 
+        
+        try
+            return! runFun gitProc 
+        with ToolProcessFailed(255, failedCmd, output, error) ->
+            let wDirInvalid = GitInvalidWorkingDir
+            wDirInvalid.Data.["Output"] <- output
+            wDirInvalid.Data.["Error"] <- error
+            wDirInvalid.Data.["ExitCode"] <- 255
+            wDirInvalid.Data.["Cmd"] <- failedCmd
+            return (raise wDirInvalid)
+        } 
     let run = 
         runAdvanced 
             (fun p -> 

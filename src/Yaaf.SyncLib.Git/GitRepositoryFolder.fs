@@ -175,15 +175,15 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                 do! GitProcess.init |> run
                 
         // Check ssh connection
-        try
-            do! SshProcess.ensureConnection (toSshPath folder.Remote) sshPath folder.FullPath
-        with
-            | SshConnectionException(message, sshError) ->
-                // most likely Offline
-                raise OfflineException
-            | SshAuthException(sshError) ->
-                t.logErr "error connecting to ssh"
-                raise (ConnectionException(sshError))
+//        try
+//            do! SshProcess.ensureConnection (toSshPath folder.Remote) sshPath folder.FullPath
+//        with
+//            | SshConnectionException(message, sshError) ->
+//                // most likely Offline
+//                raise OfflineException
+//            | SshAuthException(sshError) ->
+//                t.logErr "error connecting to ssh"
+//                raise (ConnectionException(sshError))
 
         // Check whether the "synclib" remote point exists
         let! remotes = GitProcess.remote (ListVerbose) |> run

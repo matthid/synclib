@@ -22,7 +22,7 @@ module SshProcess =
                     "ssh: connect to host localdevserver port 22: Bad file number"))
         | _ -> ()
     let ensureConnection remote ssh wDir = asyncTrace() {        
-        let sshProc = new ToolProcess(ssh, wDir, sprintf "-t -t -v -v %s" remote)
+        let sshProc = new ToolProcess(ssh, wDir, sprintf "-v -v %s" remote)
         
         do! sshProc.RunWithErrorOutputAsync(
                 (fun outputLine ->
