@@ -18,7 +18,21 @@ type CommitMessageFile = {
     ChangeType : CommitMessageChangeType
     FilePath : string 
     FilePathRename : string }
-    
+
+/// Idicates how conflicts will get resolved
+type ConflictStrategy = 
+    /// Keep the local version and discard the server changes (they are still in history)
+    | KeepLocal
+    /// Rename the server version
+    | RenameServer
+    /// Rename the local version
+    | RenameLocal
+
+/// will be triggered when something with the connection is not right
+exception ConnectionException of string
+
+/// Notify about offline state (which should be an exception)
+exception OfflineException
 
 /// A IManagedFolder implementation for repositories (git, svn ...)
 [<AbstractClass>]
@@ -26,17 +40,42 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
     let syncConflict = new Event<SyncConflict>()
     let syncError = new Event<System.Exception>()
     let syncStateChanged = new Event<SyncState>()
+    let conflictStrategy = 
+        match folder.Additional |> Dict.tryGetValue "ConflictStrategy" with
+        | Some("KeepLocal") -> KeepLocal
+        | Some("RenameServer") -> RenameServer
+        | Some("RenameLocal") -> RenameLocal
+        | Some(c) -> failwith (sprintf "unknown/invalid ConflictStrategy (%s)" c)
+        | None -> RenameLocal
+    let offlineRetryDelay = 
+        match folder.Additional |> Dict.tryGetValue "OfflineRetryDelay" with
+        | Some (Float f) -> f * 1000.0 |> int
+        | Some (c) -> failwith (sprintf "unknown/invalid OfflineRetryDelay (%s)" c)
+        | _ -> 5000
     let mutable isStarted = false
     
     let doTask syncState getTask = 
         asyncTrace() {
+            let! (t:ITracer) = AsyncTrace.TraceInfo()
             try
                 try
                     syncStateChanged.Trigger syncState
+                    t.logVerb "starting task"
                     do! getTask()
+                    t.logVerb "task finished without error"
                 finally
                     syncStateChanged.Trigger SyncState.Idle
-            with exn -> syncError.Trigger exn
+            with 
+                | OfflineException -> 
+                    t.logWarn "recognized an offline state"
+                    syncStateChanged.Trigger SyncState.Offline
+                    // Try again
+                    if offlineRetryDelay <> 0 then
+                        do! Async.Sleep offlineRetryDelay |> AsyncTrace.FromAsync
+                        x.RequestSyncDown()
+                | exn -> 
+                    t.logWarn "task finished with an error: %O" exn
+                    syncError.Trigger exn
         }
 
     let traceSource = Logging.MySource "Yaaf.SyncLib.Processing" folder.Name
@@ -77,6 +116,7 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
 
                                 tracer.logVerb "starting work %s" name
                                 do! work |> AsyncTrace.SetTracer (tracer.childTracer traceSource name)
+                               
                     with 
                         | exn -> 
                             tracer.logErr "Error in Processing: %s" (exn.ToString())
@@ -91,6 +131,9 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
                 (fun e -> 
                     globalTracer.logCrit "Mailbox crashed: %s" (e.ToString())
                     syncError.Trigger e)
+
+    /// The requested Conflictstrategy
+    member x.ConflictStrategy = conflictStrategy
 
     /// Helper method to allow tracing in child classes
     member x.SetTrace work = 

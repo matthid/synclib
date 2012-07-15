@@ -240,6 +240,8 @@ module GitProcess =
         | Contains "fatal: Not a git repository (or any of the parent directories): .git"-> raise GitNoRepository
         | Contains "Cannot rebase: You have unstaged changes."-> raise GitUnstagedChanges
         | Contains "Cannot merge"-> raise GitMergeConflict
+        | Contains "ssh: connect to host localdevserver port 22: Bad file number"-> raise OfflineException
+        | Contains "fatal: The remote end hung up unexpectedly"-> raise (ConnectionException l)
         | _ -> ()
     let gitErrorFun e = 
         handleGitErrorLine e

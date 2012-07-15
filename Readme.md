@@ -18,6 +18,8 @@ If you want something more sophisticated but easier to configure check out http:
 - CLI Runtime (one of those)
   * https://github.com/mono/mono Mono > 2.10.8 
   * http://www.microsoft.com/de-de/download/details.aspx?id=17718 .NET 4
+- https://github.com/fsharp/powerpack which includes an AsyncStreamReader
+- http://nuget.codeplex.com/ not currently used but will be most likly in the future (because of FAKE)
 
 
 ## Using
@@ -26,7 +28,8 @@ You can either use the Library or the UI
 
 ### UI
 
-There is an installation and usage guide for the binaries in https://github.com/matthid/synclib/blob/master/Usage.md
+First build (see below) or download (not available quite jet) the binaries then read
+https://github.com/matthid/synclib/blob/master/Usage.md
 
 ### Library
 
@@ -37,9 +40,15 @@ You can either:
 - Download and link the binary (whould work on mono-2.10.8 and .net4)
 
 I will add some usage code here but for now just look into the Program.fs of Yaaf.ConsoleSync which is an complete console syncronisation implementation.
+Documentation:
+See https://github.com/matthid/synclib/blob/master/Usage.md (basically usage ~ documentation for this library)
+Or look into the Scripting.fs which contains a gtk# application using the api.
+You can also look into the Yaaf.ConsoleSync application which is a full Console-Application using the library.
+
+In the future you will not have to depend on Yaaf.SyncLib.Git and Yaaf.SyncLib.Svn but for now you have to 
+(but only for very few lines, which can be changed easily in the future).
 
 ## Building
-
 
 This Section will be expended in the future.
 
@@ -51,9 +60,6 @@ I'm working on a FAKE build script (https://github.com/forki/FAKE).
 I'd like to have a FAKE build script which will work on linux and windows. 
 So if somebody has some insight on this just go ahaid and send a patch.
 
-Starting:
-Enter the folder src\Yaaf.SyncLib.Ui\bin\Debug and run StartUi.cmd from there.
-
 ### Linux
 Building
 ```bash
@@ -63,13 +69,6 @@ export FSC="mono `pwd`/lib/FSharp-4.0/fsc.exe"
 export FSI="mono `pwd`/lib/FSharp-4.0/fsi.exe"
 ./build_mono.sh
 ```
-
-Running
-```bash
-cd build/bin
-$FSI --exec --nologo RunApplication.fsx
-```
-
 
 ## Contributing
 

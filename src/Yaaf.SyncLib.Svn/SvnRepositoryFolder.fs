@@ -148,8 +148,8 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
                     // Resolve conflict
                     do! resolveConflicts()
             with
-                | SvnAlreadyLocked(ToolProcessFailed(code, cmd, o, e)) ->
-                    t.logErr "Detected a SVN Workspace Lock (%d, %s, %s, %s)" code cmd o e
+                | SvnAlreadyLocked ->
+                    t.logWarn "Detected a SVN Workspace Lock"
                     t.logInfo "Trying to resolve the lock"
                     do! SvnProcess.cleanup |> invokeSvn
                     x.RequestSyncDown() // Try again

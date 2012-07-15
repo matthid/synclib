@@ -2,23 +2,21 @@
 
 First of all please make sure if you are applicable for the gtk# gui.
 
-Check if you can answer one of the following questions with yes!
+Check if you can answer at least one of the following questions with yes!
 
 - Did you program something before in any programming language?
 - Did you script something before (like a batch or shell script)?
 - Are you persistent and resilient?
 
-If you could answer one of the above questions with "yes" you can continue.
+If you could answer one of the above questions with "yes" you can continue. 
+(Of couse you can also continue without, this was only to show that it _could_ be frustrating)
 
-Well this is maybe a bit of overkill but what I'm trying to say is that it will not run instantly.
 You have to setup your program in F#!
-
-Even the above statement will sound to you more worse that it actually is. 
-But it is true.
+Really.
 
 ## Simple Usage
 
-This will be more detailed in the future!
+First you have to configure the RunApplication.fsx to your needs
 
 ### Configuration
 The first lines are really only there to load the required dependencies and make the Scripting more smooth.
@@ -89,17 +87,74 @@ This API is not finished jet so be prepared for changes...
 Now if you have your RunApplication.fsx properly configured (or should i say "programmed")
 you can run "your" program. 
 
-If you have downloaded the binaries just run "StartUi.cmd" 
-under Windows and "StartUi.sh" under Linux/Max. 
-On Linux/Mac you must have a Mono > 2.10.8 installed and in your PATH
-Basically what you have to do is copy the lib/FSharp contents to your
+#### Windows
 
+If you did build your Executables yourself:
+Enter the folder src\Yaaf.SyncLib.Ui\bin\Debug and run StartUi.cmd from there.
+
+If you downloaded the binaries (not available quite jet):
+run "StartUi.cmd" 
+
+#### Linux/possibly Mac
+
+On Linux/Mac you must have a Mono > 2.10.8 installed and in your PATH.
+
+If you did build your Executables yourself:
+```bash
+cd build/bin
+mono fsi.exe --exec --nologo RunApplication.fsx
+```
+
+If you downloaded the binaries (not available quite jet):
+```bash
+./StartUi.sh
+```
 
 ## Advanced configuration
 
 This section will show you how to give your repros some advanced configuration settings.
 
-TODO: add content.
+A basic advanced configuration would look like this
+```fsharp
+// Your startup logic / your folders
+let myManagers = [
+        // Edit the following lines to represent your repositories (NOTE: whitespace is important in F#)
+        CustomManager 
+            Git 
+            (BackendInfo 
+                "GitReproName" 
+                "C:\\users\\me\\documents\\mygitrepro" 
+                "git@mygitserver2:repro.git"
+                (dict [("PubsubUrl",     "tcp://notifications.sparkleshare.org:80");
+                       ("PubsubChannel", "akhgfjkasbhdfasdf" )]))
+    ]
+
+```
+with dict you can initialize advanced configuration options the syntax is:
+```fsharp
+(dict [ ( "name1", "value1"); 
+		("name2","value2"); 
+		// Lots of other values
+		("nameN","valueN") ])
+```
+The following values are possible:
+
+PubsubUrl -> url to a pubsub server, for example "tcp://notifications.sparkleshare.org:80"
+PubsubChannel -> the channelname for the repro (should be unique and the same for all syncing partners)
+ConflictStrategy -> 
+	* KeepLocal means we solve conflicts by keeping the local version and discarding the server version, this can work for you on repros with history like git and svn (because you can recover the old version if you need to)
+	* RenameServer means we rename the server version to a conflict-file
+	* RenameLocal means we rename the local version to a conflict-file
+	* Any other value will prevent the startup
+	* No value means "RenameLocal"
+OfflineRetryDelay -> the delay in secounds (eg "7.5") until we try to reconnect when synclib recognizes that a server is offline, default is "5.0". "0" means we do not try to reconnect.
+gitpath -> lets you setup the path to the git.exe/git. No value means that synclib will try to find a git executable
+sshpath -> lets you setup the path to a ssh.exe/ssh. No value means that synclib will try to find one. Note: synclib does _not_ force git to use this ssh file.
+svnpath -> lets you setup the path to the svn.exe/svn. No value means that synclib will try to find a svn executable
+
+Note that not all values are used by all implementations
+git will _not_ use svnpath
+svn will _not_ use gitpath, sshpath, ConflictStrategy (currently it will always do RenameLocal)
 
 ## Customize Icon
 

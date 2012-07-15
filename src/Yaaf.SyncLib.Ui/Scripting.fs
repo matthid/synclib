@@ -51,6 +51,7 @@ module Scripting =
 
     let RunGui (managers:(ManagedFolderInfo * IManagedFolder) list)  =
         try
+            scriptTrace.logVerb "Starting UI"
             Gtk.Application.Init ();
             catalogInit "Yaaf.SyncLib.Ui" "./lang"
             let icon = StatusIcon.NewFromStock(Stock.Info)
@@ -64,7 +65,8 @@ module Scripting =
         
             icon.PopupMenu 
                 |> Event.add (fun args -> 
-                        menu.Popup(null, null, new MenuPositionFunc(fun menu x y push_in -> StatusIcon.PositionMenu(menu, ref x, ref y, ref push_in, icon.Handle)), 0u, Global.CurrentEventTime);
+                        menu.Popup()
+                        //menu.Popup(null, null, new MenuPositionFunc(fun menu x y push_in -> StatusIcon.PositionMenu(menu, ref x, ref y, ref push_in, icon.Handle)), 0u, Global.CurrentEventTime);
                         GtkUtils.bringToForeground()
                     )
 
@@ -76,18 +78,57 @@ module Scripting =
             for info, manager in managers do
             
                 let managerItem = new ImageMenuItem(CString info.Name)
-            
-                managerItem.Image <- new Image(Stock.Directory, IconSize.Menu)
+                let image = new Image(Stock.Directory, IconSize.Menu)
+                managerItem.Image <- image
                 managerItem.Activated
                     |> Event.add (fun args ->
                             System.Diagnostics.Process.Start(info.FullPath) |> ignore)
+                manager.SyncStateChanged
+                    |> Event.add (fun state ->
+                        doOnGdk (fun _ ->
+                            match state with
+                            | SyncState.Idle -> 
+                                icon.Blinking <- false
+                                icon.Stock <- Stock.Info
+                                image.Stock <- Stock.Directory
+                            | SyncState.Offline ->
+                                icon.Blinking <- false
+                                icon.Stock <- Stock.DialogWarning
+                                image.Stock <- Stock.DialogWarning
+                            | SyncState.SyncDown ->
+                                icon.Blinking <- true
+                                icon.Stock <- Stock.GoDown
+                                image.Stock <- Stock.GoDown
+                            | SyncState.SyncUp ->
+                                icon.Blinking <- true
+                                icon.Stock <- Stock.GoUp
+                                image.Stock <- Stock.GoUp
+                            | _ as syncState-> 
+                                scriptTrace.logErr "Unknown syncstate %O" syncState
+                                icon.Stock <- Stock.DialogError
+                                image.Stock <- Stock.DialogError
+                                icon.Blinking <- true
+                            )
+                        )
                 manager.SyncError
                     |> Event.add (fun error ->
                             try
                             doOnGdk (fun _ ->
+                                icon.Stock <- Stock.DialogError
+                                icon.Blinking <- true
                                 use md = new MessageDialog (null, DialogFlags.Modal, MessageType.Info, ButtonsType.Ok, sprintf "Error: %s" (error.ToString()))
-                                md.Run () |> ignore
-                                md.Destroy())
+                                md.ShowAll()
+                                let myLog m = 
+                                    printfn "%s" m; scriptTrace.logInfo "%s" m
+                                md.ButtonPressEvent    
+                                    |> Event.add (fun e -> myLog "pressed")
+                                md.ButtonReleaseEvent  
+                                    |> Event.add (fun e -> myLog "released")
+                                    
+                                md.Close
+                                    |> Event.add (fun t -> md.Destroy()))
+                                // md.Run () |> ignore
+                                //md.Destroy())
                             with exn -> scriptTrace.logErr "Error in MessageDialog %O" exn
                                 )
             

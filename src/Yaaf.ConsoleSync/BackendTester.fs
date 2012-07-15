@@ -26,7 +26,7 @@ let addManagerEvents (manager:IManagedFolder) =
         |> Event.add
             (fun error -> 
                 match error with
-                | SshException(message, log) ->
+                | SshAuthException(message) ->
                     printfn "%s" message
                     printfn ">> Stopped the service!"
                     printfn ">> open a console and execute \"%s\" and if you are asked type \"yes\"" "ssh.exe git@yourserver"

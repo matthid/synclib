@@ -293,26 +293,21 @@ module HandleSvnData =
         | _ -> failwith "invalid svn info data received!"
 
 exception SvnNotWorkingDir
-exception SvnAlreadyLocked of exn
+exception SvnAlreadyLocked
 module SvnProcess = 
     let svnErrorFun error = 
         match error with
-        | ContainsAll ["warning: W155007: ";" is not a working copy"] -> raise SvnNotWorkingDir
-        | ContainsAll ["svn: E155007: "; " is not a working copy"] -> raise SvnNotWorkingDir
-        //| ContainsAll ["svn: E155007: "; " is not a working copy"] -> raise SvnNotWorkingDir
+        | ContainsAny ["E155007"; "W155007" ] -> raise SvnNotWorkingDir
+        | Contains "E175002" -> raise OfflineException
+        | Contains "E155004" -> raise SvnAlreadyLocked
         | _ -> Option.None
 
     let runSvn rfun param svn local = asyncTrace() {
         let svnProc = new ToolProcess(svn, local, param)
-        try
-            return! rfun(svnProc) 
-        with
-            | :? ToolProcessFailed as d when d.Data3.Contains("E155004") ->
-                // Help the type inference
-                return raise (SvnAlreadyLocked(d))
+        return! rfun(svnProc) 
         }
 
-    let runSvnSimple = runSvn (fun proc -> proc.RunAsync())
+    let runSvnSimple = runSvn (fun proc -> proc.RunWithErrorOutputAsync((fun _ -> Option.None), svnErrorFun)|> AsyncTrace.Ignore)
 
     let checkout remote = runSvnSimple (sprintf "checkout -r 0 \"%s\" ." remote)
         

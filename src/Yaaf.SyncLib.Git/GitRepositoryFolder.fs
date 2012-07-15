@@ -119,21 +119,34 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
             else if (f.Local.Status = GitStatusType.Updated || f.Local.Status = GitStatusType.Added)
                     && (f.Server.Status = GitStatusType.Updated || f.Server.Status = GitStatusType.Added) 
             then
-                // Copy ours to conflicting
-                do! GitProcess.checkout (CheckoutType.Conflict(Ours, [f.Local.Path])) |> run
-                let newName = 
-                    sprintf "%s (conflicting on %s)%s"
-                        (Path.GetFileNameWithoutExtension f.Local.Path)
-                        (System.DateTime.Now.ToString("yyyy-MM-dd_hh-mm-ss"))
-                        (Path.GetExtension f.Local.Path)
-                let newFile = 
-                    Path.Combine(
-                        Path.GetDirectoryName(f.Local.Path), newName)
-                File.Move(
-                    Path.Combine(folder.FullPath, f.Local.Path),     
-                    Path.Combine(folder.FullPath, newFile))
-                // Use theirs
-                do! GitProcess.checkout (CheckoutType.Conflict(Theirs, [f.Local.Path])) |> run
+                let checkoutFile fileType =
+                    GitProcess.checkout (CheckoutType.Conflict(fileType, [f.Local.Path])) |> run
+                let renameResolution toRename toKeep = asyncTrace() {
+                    do! checkoutFile toRename
+                    let newName = 
+                        sprintf "%s (conflicting on %s)%s"
+                            (Path.GetFileNameWithoutExtension f.Local.Path)
+                            (System.DateTime.Now.ToString("yyyy-MM-dd_hh-mm-ss"))
+                            (Path.GetExtension f.Local.Path)
+                    let newFile = 
+                        Path.Combine(
+                            Path.GetDirectoryName(f.Local.Path), newName)
+                    File.Move(
+                        Path.Combine(folder.FullPath, f.Local.Path),     
+                        Path.Combine(folder.FullPath, newFile))
+                    do! checkoutFile toKeep }
+                // NOTE: We are on rebasing, see
+                // http://stackoverflow.com/questions/2959443/why-is-the-meaning-of-ours-and-theirs-reversed-with-git-svn
+                match x.ConflictStrategy with
+                // Copy local version to conflicting
+                // Use server version
+                | RenameLocal -> do! renameResolution Theirs Ours
+                // Copy server version to conflicting
+                // Use local version
+                | RenameServer -> do! renameResolution Ours Theirs
+                // Keep local version and overwrite server
+                | KeepLocal -> do! checkoutFile Theirs
+
                 syncConflict.Trigger (MergeConflict(f.Local.Path))
             else if (f.Local.Status = GitStatusType.Deleted
                     && f.Server.Status = GitStatusType.Updated)
@@ -158,13 +171,19 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
             do! GitProcess.status |> run |> AsyncTrace.Ignore
         with
             | GitNoRepository ->
-                t.logWarn "%s is no GIT Repro so init one" folder.Name
+                t.logWarn "no GIT Repro so init one"
                 do! GitProcess.init |> run
                 
-                    
-           
         // Check ssh connection
-        do! SshProcess.ensureConnection sshPath folder.FullPath (toSshPath folder.Remote) false
+        try
+            do! SshProcess.ensureConnection (toSshPath folder.Remote) sshPath folder.FullPath
+        with
+            | SshConnectionException(message, sshError) ->
+                // most likely Offline
+                raise OfflineException
+            | SshAuthException(sshError) ->
+                t.logErr "error connecting to ssh"
+                raise (ConnectionException(sshError))
 
         // Check whether the "synclib" remote point exists
         let! remotes = GitProcess.remote (ListVerbose) |> run

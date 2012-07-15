@@ -15,7 +15,7 @@ open Yaaf.SyncLib.Ui.Scripting
 
 // Your startup logic / your folders
 let myManagers = [
-        // Edit the following lines to change your repositories (NOTE: whitespace is important in F#)
+        // Edit the following lines to represent your repositories (NOTE: whitespace is important in F#)
         CustomManager 
             Git 
             (BackendInfo 
