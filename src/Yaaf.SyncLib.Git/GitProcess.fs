@@ -38,6 +38,13 @@ type GitAddType =
     | NoOptions
     | Update
     | All
+type SubmoduleType = 
+    | Add of string * string
+    | Status 
+    | Init of string list
+    | Update of string list
+    | Sync of string list
+
 type GitArguments = 
     /// ls-remote --exit-code \"{0}\" {1}
     | Ls_remote of string * string
@@ -55,6 +62,7 @@ type GitArguments =
     /// commit -m \"{0}\"
     | Commit of string
     | Checkout of CheckoutType
+    | Submodule of SubmoduleType
 
 module HandleGitArguments = 
     let escapePath p = 
@@ -96,7 +104,7 @@ module HandleGitArguments =
             sprintf "add %s --%s"
                 (match addType with
                 | NoOptions -> ""
-                | Update -> "-u"
+                | GitAddType.Update -> "-u"
                 | GitAddType.All -> "-A")
                 (files |> parseFiles)
         | Commit (message) -> sprintf "commit -m \"%s\"" message
@@ -110,7 +118,14 @@ module HandleGitArguments =
                         | Theirs -> "--theirs")
                         (files |> parseFiles)
                 | CheckoutType.Branch(name) -> name)
-                    
+        | Submodule (subType) ->
+            sprintf "submodule %s"
+                (match subType with
+                | SubmoduleType.Add(url, path) -> sprintf "add \"%s\" %s" url path
+                | SubmoduleType.Init(files) -> sprintf "init --%s" (files|>parseFiles)
+                | SubmoduleType.Status -> sprintf "status --recursive"
+                | SubmoduleType.Sync(files) -> sprintf "sync --%s" (files|>parseFiles)
+                | SubmoduleType.Update(files) -> sprintf "update --%s" (files|>parseFiles))
 
 type GitStatusType = 
     | Added    = 0
@@ -121,13 +136,30 @@ type GitStatusType =
     | Updated  = 5
     | None     = 6
     | Unknown  = 7
-            
+/// The status given by git submodule status
+type GitSubmoduleStatusType = 
+    /// ( ) All normal 
+    | None     = 0
+    /// (-) Not initialized
+    | NotInitialized = 1   
+    /// (+) Submodule changed  
+    | Changed = 2   
+    /// (U) Submodule merge conflict
+    | MergeConflict = 3
+
+       
 type GitFileStatus = {
     Status : GitStatusType;
     Path : string }
 type GitStatus =   { 
         Local : GitFileStatus;
         Server : GitFileStatus;
+    }
+type GitSubmoduleStatus = {
+        Status : GitSubmoduleStatusType
+        Sha1:string
+        Branch :string
+        Path :string 
     }
 
 type GitBranch = {
@@ -144,7 +176,7 @@ type GitRemoteInfo = {
         Type : GitRemoteType; }
         
 module HandleGitData = 
-    
+    /// Resolves an ansi string given by git and outputs the utf8 string
     let resolveSpecialChars (s:string) = 
         let codesToString codes = 
             let cds = codes |> List.rev |> List.toArray
@@ -172,7 +204,7 @@ module HandleGitData =
             // Or leave it unhandled
             | :? System.FormatException ->
                 s
-    
+    /// Resolves the given path to UTF8 if required
     let convertToResovedPath (s:string) = 
         if s.StartsWith("\"") then resolveSpecialChars (s.Substring(1, s.Length - 2))
         else s
@@ -188,7 +220,13 @@ module HandleGitData =
         | ' ' -> GitStatusType.None
         | '?' -> GitStatusType.Unknown
         | _ -> failwith "invalid Status code"
-
+    let convertSubmoduleStatus c = 
+        match c with
+        | ' ' -> GitSubmoduleStatusType.None
+        | '-' -> GitSubmoduleStatusType.NotInitialized
+        | '+' -> GitSubmoduleStatusType.Changed
+        | 'U' -> GitSubmoduleStatusType.MergeConflict
+        | _ -> failwith "unknown Submodule Status code"
     let convertArrowPath (p:string) = 
         let i = p.IndexOf(" -> ")
         if (i <> -1) then
@@ -206,6 +244,16 @@ module HandleGitData =
             Local = { Status = s1; Path = p1}; 
             Server = { Status = s2; Path = p2}
         }
+    let parseSubmoduleStatusLine (l:string) = 
+        let splits = l.Substring(1).Split([|' '|])
+        {
+            Status = convertSubmoduleStatus l.[0]
+            Sha1 = splits.[0]
+            Branch = splits.[splits.Length - 1]
+            Path = System.String.Join(" ", splits |> Seq.skip 1 |> Seq.take (splits.Length - 2))
+        }
+
+
 /// Permission of the given file was denied (can be "unknown filename") 
 exception GitPermissionDenied of string
 /// Push was rejected
@@ -222,6 +270,8 @@ exception GitUnstagedChanges
 exception GitMergeConflict
 /// When git got an invalid working-dir
 exception GitInvalidWorkingDir
+
+/// Access to git commands
 module GitProcess = 
     let tracer = new TraceSource("Yaaf.SyncLib.Git.GitProcess")
     let handleGitErrorLine l = 
@@ -395,4 +445,13 @@ module GitProcess =
     /// Runs git checkout
     let checkout checkoutType = 
         run (GitArguments.Checkout(checkoutType))
-
+    /// Runs a git submodule command
+    let submodule submoduleType = 
+        run (GitArguments.Submodule(submoduleType))
+    /// Runs the git submodule status command
+    let submoduleStatus () = 
+        runAdvanced 
+            (fun gitProc -> 
+                gitProc.RunWithErrorOutputAsync((HandleGitData.parseSubmoduleStatusLine >> Some), gitErrorFun)
+                |> onlyOutput) 
+            (GitArguments.Submodule SubmoduleType.Status)
