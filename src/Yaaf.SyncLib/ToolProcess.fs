@@ -101,7 +101,9 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
                     if (data.Data <> null) then
                         t.logVerb "Received Line %s" data.Data
                         (!outputBuilder).AppendLine(data.Data) |> ignore)
-
+            let commandLine = 
+                sprintf "%s> \"%s\" %s" workingDir processFile arguments
+            t.logInfo "Starting Process: %s" commandLine
             toolProcess.Start() |> ignore
             toolProcess.BeginErrorReadLine()
             toolProcess.BeginOutputReadLine()
@@ -125,26 +127,25 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
 
             let getFailData ()= 
                 (!outputBuilder).ToString(),
-                (!errorBuilder).ToString(),
-                sprintf "%s> \"%s\" %s" workingDir processFile arguments
+                (!errorBuilder).ToString()
 
             // Check if we already recognised an error
             for e in [!errorExn;!outputExn] do
                 if (e <> null) then
                     // Add all infos we have
-                    let output, error, failedCmd = getFailData()
+                    let output, error = getFailData()
                     e.Data.["Output"] <- output
                     e.Data.["Error"] <- error
                     e.Data.["ExitCode"] <- exitCode
-                    e.Data.["Cmd"] <- failedCmd
-                    t.logWarn "ToolProcess custom fail!\n\tCommand Line (exited with %d): %s\n\tCustomExn: %A\n\tOutput: %s\n\tError: %s" exitCode failedCmd e output error
+                    e.Data.["Cmd"] <- commandLine
+                    t.logWarn "ToolProcess custom fail!\n\tCommand Line (exited with %d): %s\n\tCustomExn: %A\n\tOutput: %s\n\tError: %s" exitCode commandLine e output error
                     raise e
 
             // Check exitcode
             if exitCode <> 0 then 
-                let output, error, failedCmd = getFailData()
-                t.logErr "ToolProcess failed!\n\tCommand Line (exited with %d): %s\n\tOutput: %s\n\tError: %s" exitCode failedCmd output error
-                raise (ToolProcessFailed (exitCode, failedCmd, output, error))
+                let output, error = getFailData()
+                t.logErr "ToolProcess failed!\n\tCommand Line (exited with %d): %s\n\tOutput: %s\n\tError: %s" exitCode commandLine output error
+                raise (ToolProcessFailed (exitCode, commandLine, output, error))
 
             return outputData, errorData
         }
