@@ -10,6 +10,9 @@ open Yaaf.AsyncTrace
 
 open System.IO
 
+type IRunner = 
+    abstract member Run : (string->string->AsyncTrace<ITracer,'a>)->AsyncTrace<ITracer,'a>
+    
 /// Syncronises a git folder
 type GitRepositoryFolder(folder:ManagedFolderInfo) as x =  
     inherit RepositoryFolder(folder)
@@ -28,7 +31,10 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
     let mutable isInit = false
     let git = folder.Additional.["gitpath"]
     let sshPath = folder.Additional.["sshpath"]
-    let run f = f git folder.FullPath
+    let createRunner git folderPath = 
+        { new IRunner with
+            member x.Run f = f git folderPath }
+    let defaultRunner = createRunner git folder.FullPath
     // Starts watching the given Changewatcher (uses the given processor-message)
     
 
@@ -69,7 +75,8 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
 
 
     /// Adds all files to the index and does a commit to the repro
-    let commitAllChanges() = asyncTrace() {
+    let commitAllChanges (runner:IRunner) = asyncTrace() {
+        let run f = runner.Run f
         let! (t:ITracer) = AsyncTrace.TraceInfo()
         t.logVerb "Commiting All Changes in %s" folder.Name
         // Add all files
@@ -100,7 +107,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
        
         
         let commitMessage = 
-             x.GenerateCommitMessage normalizedChanges
+            x.GenerateCommitMessage normalizedChanges
 
         if normalizedChanges |> Seq.length > 0 then
             // Do the commit
@@ -108,7 +115,8 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
     }
 
     /// Resolves Conflicts and 
-    let rec resolveConflicts() = asyncTrace() {
+    let rec resolveConflicts (runner:IRunner) = asyncTrace() {
+        let run f = runner.Run f
         let! (t:ITracer) = AsyncTrace.TraceInfo()
         t.logVerb "Resolving GIT Conflicts in %s" folder.Name
         let! fileStatus = GitProcess.status |> run
@@ -159,16 +167,18 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
         with
             | GitMergeConflict ->
                 t.logWarn "still conflicts detected... trying to resolve"
-                do! resolveConflicts()
+                do! resolveConflicts runner
     }
 
     /// Initialize the repository
-    let init() = asyncTrace() {
+    let init (runner:IRunner) remote = asyncTrace() {
+        let run f = runner.Run f  
         let! (t:ITracer) = AsyncTrace.TraceInfo()
         t.logInfo "Init GIT Repro %s" folder.Name
         // Check if repro is initialized (ie is a git repro)
         try
-            do! GitProcess.status |> run |> AsyncTrace.Ignore
+            let t = GitProcess.status |> run
+            do! t |> AsyncTrace.Ignore
         with
             | GitNoRepository ->
                 t.logWarn "no GIT Repro so init one"
@@ -197,7 +207,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                 do! GitProcess.remote (Remove(remoteName)) |> run |> AsyncTrace.Ignore
                 
             t.logInfo "adding %s remote entry to %s" remoteName folder.Name
-            do! GitProcess.remote (RemoteType.Add(remoteName, folder.Remote)) |> run |> AsyncTrace.Ignore
+            do! GitProcess.remote (RemoteType.Add(remoteName, remote)) |> run |> AsyncTrace.Ignore
             
         isInit <- true
     }
@@ -210,11 +220,13 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
             "You can safely remove it any time" ) 
 
     /// The SyncDown Process
-    let syncDown() = asyncTrace() {
+    let syncDown (runner:IRunner) scale start = asyncTrace() {
+        let run f = runner.Run f
         let! (t:ITracer) = AsyncTrace.TraceInfo()
-        progressChanged.Trigger 0.0
+
+        progressChanged.Trigger start
         try
-            if not isInit then do! init()
+            if not isInit then do! init runner folder.Remote
 
             t.logInfo "Starting GIT Syncdown of %s" folder.Name
 
@@ -222,18 +234,18 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
             do! GitProcess.fetch
                     remoteName
                     "master"
-                    (fun newProgress -> progressChanged.Trigger (newProgress * 0.95))
+                    (fun newProgress -> progressChanged.Trigger (start + newProgress * scale * 0.95))
                 |> run |> AsyncTrace.Ignore
 
             // Merge changes into local directory via "git rebase FETCH_HEAD"
-            do! commitAllChanges()
+            do! commitAllChanges runner
             try
                 t.logInfo "Starting GIT SyncDown-Merging of %s" folder.Name
                 do! GitProcess.rebase (Start("FETCH_HEAD", "master")) |> run
             with
                 | GitMergeConflict ->
                     t.logWarn "conflicts detected... trying to resolve"
-                    do! resolveConflicts()
+                    do! resolveConflicts runner
                 | GitUnstagedChanges ->
                     t.logWarn "unstaged changes"
                     x.RequestSyncDown()
@@ -252,18 +264,19 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                     do! GitProcess.rebase Abort |> run
                     x.RequestSyncDown() // try again
         finally 
-            progressChanged.Trigger 1.0
+            progressChanged.Trigger (start + scale)
     }
 
     /// The Upsync Process
-    let syncUp() = asyncTrace() {
+    let syncUp (runner:IRunner) = asyncTrace() {
+        let run f = runner.Run f
         let! (t:ITracer) = AsyncTrace.TraceInfo()
         try
             t.logInfo "Starting GIT SyncUp of %s" folder.Name
             progressChanged.Trigger 0.0
 
             // Push data up to server
-            do! commitAllChanges()
+            do! commitAllChanges runner
             do! GitProcess.push
                     remoteName
                     "master"
@@ -286,10 +299,10 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
     }
 
     override x.StartSyncDown () = 
-        syncDown()
+        syncDown defaultRunner 1.0 0.0
 
     override x.StartSyncUp() = 
-        syncUp()
+        syncUp defaultRunner
         
     [<CLIEvent>]
     override x.ProgressChanged = progressChanged.Publish
