@@ -54,6 +54,14 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
 
         remoteEvent
                 |> Event.add x.RequestSyncDown
+    
+    /// Little helper function for logging the folder and git path from a runner
+    let log (runner:IRunner) f = asyncTrace() {
+        let run f = runner.Run f
+        return! run (fun git folder -> asyncTrace() {
+                    return (f git folder)
+                })
+    }
 
     let toSshPath (remote:string) = 
         let remote = 
@@ -78,7 +86,8 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
     let commitAllChanges (runner:IRunner) = asyncTrace() {
         let run f = runner.Run f
         let! (t:ITracer) = AsyncTrace.TraceInfo()
-        t.logVerb "Commiting All Changes in %s" folder.Name
+        t.logVerb "Commiting All Changes"
+
         // Add all files
         do! GitProcess.add (GitAddType.All) ([]) |> run
         // procude a commit message
@@ -118,7 +127,8 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
     let rec resolveConflicts (runner:IRunner) = asyncTrace() {
         let run f = runner.Run f
         let! (t:ITracer) = AsyncTrace.TraceInfo()
-        t.logVerb "Resolving GIT Conflicts in %s" folder.Name
+        t.logVerb "Resolving GIT Conflicts"
+
         let! fileStatus = GitProcess.status |> run
         for f in fileStatus do
             if (f.Local.Path.EndsWith(".sparkleshare") || f.Local.Path.EndsWith(".empty")) then
@@ -171,10 +181,10 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
     }
 
     /// Initialize the repository
-    let init (runner:IRunner) remote = asyncTrace() {
-        let run f = runner.Run f  
+    let init() = asyncTrace() {
+        let run f = defaultRunner.Run f  
         let! (t:ITracer) = AsyncTrace.TraceInfo()
-        t.logInfo "Init GIT Repro %s" folder.Name
+        t.logInfo "Init GIT Repro"
         // Check if repro is initialized (ie is a git repro)
         try
             let t = GitProcess.status |> run
@@ -184,6 +194,12 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                 t.logWarn "no GIT Repro so init one"
                 do! GitProcess.init |> run
                 
+        isInit <- true
+    }
+
+    let initRemote (runner:IRunner) remote = asyncTrace() {    
+        let run f = runner.Run f     
+        let! (t:ITracer) = AsyncTrace.TraceInfo()   
         // Check ssh connection
 //        try
 //            do! SshProcess.ensureConnection (toSshPath folder.Remote) sshPath folder.FullPath
@@ -197,19 +213,25 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
 
         // Check whether the "synclib" remote point exists
         let! remotes = GitProcess.remote (ListVerbose) |> run
+        
+        // take "origin" if there is none given
+        let remote =
+            if System.String.IsNullOrEmpty(remote) then
+               let origin = remotes |> Seq.filter (fun t -> t.Name = "origin") |> Seq.head
+               origin.Url
+            else remote
+
         let syncRemotes = 
             remotes 
                 |> Seq.filter (fun t -> t.Name = remoteName)
                 |> Seq.toArray
-        if (syncRemotes.Length < 2 || syncRemotes |> Seq.exists (fun t -> t.Url <> folder.Remote)) then
+        if (syncRemotes.Length < 2 || syncRemotes |> Seq.exists (fun t -> t.Url <> remote)) then
             if (syncRemotes.Length > 0) then
-                t.logWarn "%s has invalid %s remote entry - removing" folder.Name remoteName
+                t.logWarn "invalid %s remote entry - removing" remoteName
                 do! GitProcess.remote (Remove(remoteName)) |> run |> AsyncTrace.Ignore
                 
-            t.logInfo "adding %s remote entry to %s" remoteName folder.Name
+            t.logInfo "adding %s remote entry" remoteName
             do! GitProcess.remote (RemoteType.Add(remoteName, remote)) |> run |> AsyncTrace.Ignore
-            
-        isInit <- true
     }
 
     
@@ -220,16 +242,15 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
             "You can safely remove it any time" ) 
 
     /// The SyncDown Process
-    let syncDown (runner:IRunner) scale start = asyncTrace() {
+    let syncDown (runner:IRunner) remote scale start = asyncTrace() {
         let run f = runner.Run f
         let! (t:ITracer) = AsyncTrace.TraceInfo()
+        do! (fun git folder -> t.logInfo "Starting GIT Syncdown of %s" folder) 
+            |> log runner 
 
+        do! initRemote runner remote
         progressChanged.Trigger start
         try
-            if not isInit then do! init runner folder.Remote
-
-            t.logInfo "Starting GIT Syncdown of %s" folder.Name
-
             // Fetch changes
             do! GitProcess.fetch
                     remoteName
@@ -272,7 +293,9 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
         let run f = runner.Run f
         let! (t:ITracer) = AsyncTrace.TraceInfo()
         try
-            t.logInfo "Starting GIT SyncUp of %s" folder.Name
+            do! (fun git folder -> t.logInfo "Starting GIT SyncUp of %s" folder) 
+                |> log runner 
+            
             progressChanged.Trigger 0.0
 
             // Push data up to server
@@ -298,11 +321,73 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                 x.RequestSyncUp()               
     }
 
-    override x.StartSyncDown () = 
-        syncDown defaultRunner 1.0 0.0
+    let initRequiredSubmodules submoduleStatus = asyncTrace() {
+        let run f = defaultRunner.Run f
+        let! (t:ITracer) = AsyncTrace.TraceInfo()
+        let modulesToInit = 
+            submoduleStatus
+                |> Seq.filter (fun s -> s.Status = GitSubmoduleStatusType.NotInitialized)
+                |> Seq.map (fun s -> s.Path)
+                |> Seq.toList
+        if not modulesToInit.IsEmpty then
+            do! GitProcess.submodule (SubmoduleType.Update(modulesToInit)) |> run
+    }
 
-    override x.StartSyncUp() = 
-        syncUp defaultRunner
+    let syncDownGeneral () = asyncTrace() {
+        let run f = defaultRunner.Run f
+        let! (t:ITracer) = AsyncTrace.TraceInfo()
+        if not isInit then do! init()
+        // Regular Download
+        do! syncDown defaultRunner folder.Remote 1.0 0.0
+        
+        // Handle Submodules
+        let! submoduleStatus = GitProcess.submoduleStatus() |> run
+        do! initRequiredSubmodules submoduleStatus
+        do!
+            submoduleStatus
+                |> Seq.map
+                    (fun s -> asyncTrace() {
+                        do! syncDown 
+                                (createRunner git (Path.Combine(folder.FullPath, s.Path))) 
+                                ""
+                                1.0 
+                                0.0 
+                        do! GitProcess.add (GitAddType.NoOptions) ([s.Path]) |> run
+                    })
+                |> Seq.map (fun a -> a |> AsyncTrace.SetTracer t)
+                |> Async.Parallel
+                |> AsyncTrace.FromAsync
+                |> AsyncTrace.Ignore
+    }           
+
+        
+    let syncUpGeneral () = asyncTrace() {
+        let run f = defaultRunner.Run f
+        let! (t:ITracer) = AsyncTrace.TraceInfo()
+        // Handle Submodules
+        let! submoduleStatus = GitProcess.submoduleStatus() |> run
+        do! initRequiredSubmodules submoduleStatus
+        do!
+            submoduleStatus
+                |> Seq.map (fun s -> s.Path)
+                |> Seq.map
+                    (fun s -> asyncTrace() {
+                        do! syncUp
+                                (createRunner git (Path.Combine(folder.FullPath, s))) 
+                        do! GitProcess.add (GitAddType.NoOptions) ([s]) |> run
+                    })
+                |> Seq.map (fun a -> a |> AsyncTrace.SetTracer t)
+                |> Async.Parallel
+                |> AsyncTrace.FromAsync
+                |> AsyncTrace.Ignore
+
+        // Regular upload
+        do! syncUp defaultRunner
+    }
+
+    override x.StartSyncDown () = syncDownGeneral()
+
+    override x.StartSyncUp() = syncUpGeneral()
         
     [<CLIEvent>]
     override x.ProgressChanged = progressChanged.Publish
