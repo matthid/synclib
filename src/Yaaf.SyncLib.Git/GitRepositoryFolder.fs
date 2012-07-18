@@ -102,7 +102,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
         let commitMessage = 
              x.GenerateCommitMessage normalizedChanges
 
-        if changes.Count > 0 then
+        if normalizedChanges |> Seq.length > 0 then
             // Do the commit
             do! GitProcess.commit (commitMessage) |> run
     }
