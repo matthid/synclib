@@ -123,17 +123,28 @@ let myManagers = [
                 "GitReproName" 
                 "C:\\users\\me\\documents\\mygitrepro" 
                 "git@mygitserver2:repro.git"
-                (dict [("PubsubUrl",     "tcp://notifications.sparkleshare.org:80");
+                (Map.ofList [("PubsubUrl",     "tcp://notifications.sparkleshare.org:80");
                        ("PubsubChannel", "akhgfjkasbhdfasdf" )]))
+		
+		// Or this syntax
+        CustomManager 
+            Git 
+            {
+                Name = "GitReproName" 
+                FullPath = "C:\\users\\me\\documents\\mygitrepro" 
+                Remote = "git@mygitserver2:repro.git"
+                Additional = Map.ofList [("PubsubUrl",     "tcp://notifications.sparkleshare.org:80");
+                                         ("PubsubChannel", "akhgfjkasbhdfasdf" )]
+            }
     ]
 
 ```
-with dict you can initialize advanced configuration options the syntax is:
+with Map.ofList you can initialize the advanced configuration options, the syntax is:
 ```fsharp
-(dict [ ( "name1", "value1"); 
-		("name2","value2"); 
-		// Lots of other values
-		("nameN","valueN") ])
+(Map.ofList [ ( "name1", "value1"); 
+			  ("name2","value2"); 
+			  // Lots of other values
+			  ("nameN","valueN") ])
 ```
 The following values are possible:
 
@@ -188,6 +199,21 @@ Note that not all values are used by all implementations.
 
 1.  git will _not_ use svnpath
 2.  svn will _not_ use gitpath, sshpath, ConflictStrategy (currently it will always do RenameLocal)
+
+There is an additional, more powerfull syntax:
+
+```fsharp
+let myManagers = [
+        // HARD Syntax
+        EmptyManager 
+            Git
+            { Name = "Repro"; FullPath = "/path/to/repro"; Remote ="git@otherserver:repro"; Additional = Map.empty }
+            // Add a filesystemwatcher with a reduced time from 1 minute and ignore the ".git" folder
+            |> AddLocalWatcher (System.TimeSpan.FromMinutes 1.0) [".git"]
+            // Add a Pubsub server
+            |> AddRemoteFromData (Pubsub(new System.Uri("tcp://notifications.sparkleshare.org:80"), "channel"))
+	]		
+```
 
 ## Customize Icon
 

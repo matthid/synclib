@@ -9,12 +9,13 @@ open Yaaf.SyncLib.PubsubImplementation
 open Yaaf.AsyncTrace
 
 /// Opt in Api to watch local changes, will trigger on any folder changes on the given folder
-type SimpleLocalChangeWatcher(folder : string, onError)  = 
+type SimpleLocalChangeWatcher(folder : string)  = 
+    let errorEvent = new Event<exn>()
     let changedEvent = new Event<System.IO.WatcherChangeTypes * string * string>()
     let watcher = new System.IO.FileSystemWatcher(folder, "*")
+    let tracer = Logging.DefaultTracer SimpleLocalChangeWatcher.traceSource folder
     do
         watcher.IncludeSubdirectories <- true
-        watcher.EnableRaisingEvents <- true
         watcher.NotifyFilter <-
             System.IO.NotifyFilters.Attributes ||| System.IO.NotifyFilters.CreationTime ||| System.IO.NotifyFilters.DirectoryName
             ||| System.IO.NotifyFilters.FileName ||| System.IO.NotifyFilters.LastAccess ||| System.IO.NotifyFilters.LastWrite
@@ -28,11 +29,22 @@ type SimpleLocalChangeWatcher(folder : string, onError)  =
             |> Event.merge (watcher.Renamed |> Event.map (fun args -> args.ChangeType, args.OldFullPath, args.FullPath))
             |> Event.add (fun args -> changedEvent.Trigger args)
       
-        watcher.Error |> Event.add (fun er -> onError(er.GetException()))
+        watcher.Error 
+            |> Event.map (fun er -> er.GetException())
+            |> Event.add 
+                (fun er -> 
+                    tracer.logCrit "Localwatcher error %O" er
+                    crash er)
+    /// Starts watching
+    member x.Start () =     
+        tracer.logVerb "Starting watching"
+        watcher.EnableRaisingEvents <- true
 
     /// The Changed event will be triggered when a change occured.
     [<CLIEvent>]
     member x.Changed = changedEvent.Publish
+    static member private traceSource = Logging.Source "Yaaf.SyncLib.SimpleLocalChangeWatcher"
+                                        
 
 /// Helper type for the PubsubConnection Processor
 type PubsubConnectionMessages = 
@@ -98,17 +110,6 @@ type PubsubConnection(host, port) as x =
     member x.Subscriptions with get () = subscriptions
 
     
-/// Opt in Api to watch remote changes
-type PubsubChangeWatcher(event:IEvent<_>) = 
-    let changedEvent = new Event<unit>()    
-    do
-        event
-            |> Event.add (fun m -> changedEvent.Trigger())
-
-    /// The Changed event will be triggered when a change occured.
-    [<CLIEvent>]
-    member x.Changed = changedEvent.Publish
-
 type RemoteConnectionType =
     | Pubsub of System.Uri * string
     
@@ -127,17 +128,8 @@ module RemoteConnectionManager =
                     let con = new PubsubConnection(uri.Host, uri.Port)
                     connections.Add(key, con)
                     con))
-    
-    /// given an Data dictionary we will return all available remote data server
-    let extractRemoteConnectionData (dataDict:System.Collections.Generic.IDictionary<string,string>) =
-        seq {
-            match dataDict |> Dict.tryGetValue "PubsubUrl", 
-                  dataDict |> Dict.tryGetValue "PubsubChannel" with
-            | Some (pubsubUri), Some(pubsubChannel) -> 
-                yield Pubsub(new System.Uri(pubsubUri),pubsubChannel)
-            | _ -> ()
-        }
-    /// given a remote data server will return the event for changes
+
+    /// returns the event for changes for a RemoteConnectionType
     let remoteDataToEvent = 
         let lockObj = new obj()
         (fun t ->
@@ -154,25 +146,22 @@ module RemoteConnectionManager =
                     |> Event.add (con.Announce channel)
                 pushedEvent,
                 con.[channel]
-                    |> Event.map (fun t -> ()))
+                    |> Event.map (fun t -> t))
 
     /// Will calculate a merged event for all available remote data server
     let calculateMergedEvent =
-        let nonEvent = new Event<unit>()     
-        (fun (folder:RemoteConnectionType seq) -> asyncTrace() {
-            let! (tracer:ITracer) = AsyncTrace.TraceInfo()
+        let nonEvent = new Event<string>()     
+        fun (folder:RemoteConnectionType seq) -> 
             let pushedEvent = new Event<string>()
-            let count, event =
+            let event =
                 folder
                 |> Seq.map remoteDataToEvent
                 |> Seq.fold
-                    (fun (i,state) (innerPushedEvent, item) ->
+                    (fun state (innerPushedEvent, item) ->
                         pushedEvent.Publish |> Event.add (fun n -> innerPushedEvent.Trigger n)
-                        i+1, state |> Event.merge item)
-                    (0, nonEvent.Publish)
-            if count = 0 then tracer.logWarn "No remote connectiondata! Automatic Remote Updates will be disabled!"
-            return pushedEvent, event
-        })
+                        state |> Event.merge item)
+                    nonEvent.Publish
+            pushedEvent, event
 
 
 

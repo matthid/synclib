@@ -16,6 +16,23 @@ open Yaaf.SyncLib.Ui.Scripting
 // Your startup logic / your folders
 let myManagers = [
         // Edit the following lines to represent your repositories (NOTE: whitespace is important in F#)
+
+        // EASY Syntax
+
+        // Add a git repository note the "GitRepro/Test" is the name and no folder
+        Manager Git "GitRepro/Test" "C:\\users\\me\\documents\\mygitrepro" "git@mygitserver:repro.git"
+
+        // Add a svn repository
+        Manager Svn "SvnRepro" "/home/me/svnrepr1" "https://server1.com/svn/root/subfolder"
+
+        // Add a svn repository but expain it
+        Manager 
+            Svn // the type of the manager (currently Svn or Git)
+            "SvnRepro2"  // The name of the repro (this will be shown in the menu)
+            "/home/me/svnrepro2" // Path to my folder path (where i want my repository to sit)
+            "https://server2.com/svn/root" // the url of the server
+
+        // MEDIUM Syntax
         CustomManager 
             Git 
             (BackendInfo 
@@ -35,18 +52,14 @@ let myManagers = [
                                          ("PubsubChannel", "akhgfjkasbhdfasdf" )]
             }
 
-        // Add a git repository note the "GitRepro/Test" is the name and no folder
-        Manager Git "GitRepro/Test" "C:\\users\\me\\documents\\mygitrepro" "git@mygitserver:repro.git"
-
-        // Add a svn repository
-        Manager Svn "SvnRepro" "/home/me/svnrepr1" "https://server1.com/svn/root/subfolder"
-
-        // Add a svn repository but expain it
-        Manager 
-            Svn // the type of the manager (currently Svn or Git)
-            "SvnRepro2"  // The name of the repro (this will be shown in the menu)
-            "/home/me/svnrepro2" // Path to my folder path (where i want my repository to sit)
-            "https://server2.com/svn/root" // the url of the server
+        // HARD Syntax
+        EmptyManager 
+            Git
+            { Name = "Repro"; FullPath = "/path/to/repro"; Remote ="git@otherserver:repro"; Additional = Map.empty }
+            // Add a filesystemwatcher with a reduced time from 1 minute and ignore the ".git" folder
+            |> AddLocalWatcher (System.TimeSpan.FromMinutes 1.0) [".git"]
+            // Add a Pubsub server
+            |> AddRemoteFromData (Pubsub(new System.Uri("tcp://notifications.sparkleshare.org:80"), "channel"))
 
         // Stop editing here if you don't know what you are doing
     ]

@@ -17,13 +17,6 @@ type IRunner =
 type GitRepositoryFolder(folder:ManagedFolderInfo) as x =  
     inherit RepositoryFolder(folder)
 
-    let localWatcher = new SimpleLocalChangeWatcher(folder.FullPath, (fun err -> x.ReportError err))
-    let pushEvent, remoteEvent = 
-        folder.Additional
-            |> RemoteConnectionManager.extractRemoteConnectionData
-            |> RemoteConnectionManager.calculateMergedEvent
-            |> x.SetTrace
-            |> Async.RunSynchronously
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()
     let remoteName = "synclib"
@@ -35,25 +28,6 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
         { new IRunner with
             member x.Run f = f git folderPath }
     let defaultRunner = createRunner git folder.FullPath
-    // Starts watching the given Changewatcher (uses the given processor-message)
-    
-
-        
-    do 
-        // Start watching
-        localWatcher.Changed
-            // Filter git directory
-            |> Event.filter 
-                (fun (changeType, oldPath, newPath)-> 
-                    let gitPath = Path.Combine(folder.FullPath, ".git")
-                    not (oldPath.StartsWith gitPath) && not (newPath.StartsWith gitPath))
-            // Reduce event
-            |> Event.reduceTime (System.TimeSpan.FromMinutes(1.0))
-            |> Event.add (fun args -> 
-                x.RequestSyncUp())
-
-        remoteEvent
-                |> Event.add x.RequestSyncDown
     
     /// Little helper function for logging the folder and git path from a runner
     let log (runner:IRunner) f = asyncTrace() {
@@ -306,8 +280,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                     (fun newProgress -> progressChanged.Trigger newProgress)
                 |> run   
             
-            // NOTE: Check it there was indeed something pushed
-            pushEvent.Trigger("gitupdate")
+            // NOTE: Check if there was indeed something pushed
             progressChanged.Trigger 1.0
         with 
             | GitNoMasterBranch -> 

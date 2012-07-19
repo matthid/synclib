@@ -14,15 +14,7 @@ open System.IO
 /// Syncronises a git folder
 type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =  
     inherit RepositoryFolder(folder)
-
-    let localWatcher = new SimpleLocalChangeWatcher(folder.FullPath, (fun err -> x.ReportError err))
-    let pushEvent, remoteEvent = 
-        folder.Additional
-            |> RemoteConnectionManager.extractRemoteConnectionData
-            |> RemoteConnectionManager.calculateMergedEvent
-            |> x.SetTrace
-            |> Async.RunSynchronously
-
+    
     let progressChanged = new Event<double>()
     let syncConflict = new Event<SyncConflict>()
 
@@ -30,20 +22,6 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
     let mutable isInit = false
     let svnPath = folder.Additional.["svnpath"]
     let invokeSvn f = f svnPath folder.FullPath
-    do
-        // Start watching
-        localWatcher.Changed
-            // Filter svn directory
-            |> Event.filter 
-                (fun (changeType, oldPath, newPath)-> 
-                    let gitPath = Path.Combine(folder.FullPath, ".svn")
-                    not (oldPath.StartsWith gitPath) && not (newPath.StartsWith gitPath))
-            // Reduce event
-            |> Event.reduceTime (System.TimeSpan.FromMinutes(1.0))
-            |> Event.add (fun args -> x.RequestSyncUp())
-
-        remoteEvent
-            |> Event.add x.RequestSyncDown
 
     let init() = asyncTrace() {
         let! (t:ITracer) = traceInfo()
@@ -203,8 +181,6 @@ type SvnRepositoryFolder(folder:ManagedFolderInfo) as x =
         
         // Do the commit
         do! SvnProcess.commit commitMessage |> invokeSvn
-        // NOTE: Check it there was indeed something pushed
-        pushEvent.Trigger("svnupdate")
     }    
     
     override x.StartSyncDown () = 

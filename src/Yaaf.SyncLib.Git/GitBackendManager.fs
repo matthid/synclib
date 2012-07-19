@@ -39,13 +39,13 @@ type GitBackendManager() =
     member x.CreateFolderManager(folder:ManagedFolderInfo) = 
         let newDict =
             folder.Additional 
-                |> Map.tryAdd "gitPath" gitPath
+                |> Map.tryAdd "gitpath" gitPath
                 |> Map.tryAdd "sshpath" sshPath
 
         if not <| System.IO.Directory.Exists(folder.FullPath) then
             System.IO.Directory.CreateDirectory(folder.FullPath) |> ignore
 
-        new GitRepositoryFolder({ folder with Additional = newDict }) :> IManagedFolder
+        new GitRepositoryFolder({ folder with Additional = newDict }) :> ISyncFolderFolder
     
     interface IBackendManager with
         member x.CreateFolderManager(folder) = x.CreateFolderManager(folder)

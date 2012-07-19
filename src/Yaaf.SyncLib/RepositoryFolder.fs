@@ -38,7 +38,6 @@ exception OfflineException
 [<AbstractClass>]
 type RepositoryFolder(folder : ManagedFolderInfo) as x = 
     let syncConflict = new Event<SyncConflict>()
-    let syncError = new Event<System.Exception>()
     let syncStateChanged = new Event<SyncState>()
     let conflictStrategy = 
         match folder.Additional |> Dict.tryGetValue "ConflictStrategy" with
@@ -54,28 +53,29 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
         | _ -> 5000
     let mutable isStarted = false
     
-    let doTask syncState getTask = 
+    let doTask syncType getTask = 
         asyncTrace() {
             let! (t:ITracer) = AsyncTrace.TraceInfo()
             try
                 try
-                    syncStateChanged.Trigger syncState
+                    syncStateChanged.Trigger (SyncState.SyncStart syncType)
                     t.logVerb "starting task"
                     do! getTask()
+                    syncStateChanged.Trigger (SyncState.SyncComplete syncType)
                     t.logVerb "task finished without error"
-                finally
-                    syncStateChanged.Trigger SyncState.Idle
-            with 
-                | OfflineException -> 
-                    t.logWarn "recognized an offline state"
-                    syncStateChanged.Trigger SyncState.Offline
-                    // Try again
-                    if offlineRetryDelay <> 0 then
-                        do! Async.Sleep offlineRetryDelay |> AsyncTrace.FromAsync
-                        x.RequestSyncDown()
-                | exn -> 
-                    t.logWarn "task finished with an error: %O" exn
-                    syncError.Trigger exn
+                with 
+                    | OfflineException -> 
+                        t.logWarn "recognized an offline state"
+                        syncStateChanged.Trigger SyncState.Offline
+                        // Try again
+                        if offlineRetryDelay <> 0 then
+                            do! Async.Sleep offlineRetryDelay |> AsyncTrace.FromAsync
+                            x.RequestSyncDown()
+                    | exn -> 
+                        t.logWarn "task finished with an error: %O" exn
+                        syncStateChanged.Trigger (SyncState.SyncError (syncType, exn))
+            finally
+                syncStateChanged.Trigger SyncState.Idle
         }
 
     let traceSource = Logging.MySource "Yaaf.SyncLib.Processing" folder.Name
@@ -88,39 +88,35 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
             let rec loop i =
                 async {
                     use tracer = globalTracer.childTracer traceSource (sprintf "Round %d" i)
-                    try
-                        tracer.logVerb "Waiting for messages"
-                        // Get All messages (or wait for the first if non available)
-                        let! allmsgs = 
-                            seq { 
-                                if (inbox.CurrentQueueLength = 0) then
-                                    yield inbox.Receive()
-                                else
-                                    for i in 1 .. inbox.CurrentQueueLength do
-                                        yield inbox.Receive() 
-                            }   
-                            |> Async.Parallel
+                    tracer.logVerb "Waiting for messages"
+                    // Get All messages (or wait for the first if non available)
+                    let! allmsgs = 
+                        seq { 
+                            if (inbox.CurrentQueueLength = 0) then
+                                yield inbox.Receive()
+                            else
+                                for i in 1 .. inbox.CurrentQueueLength do
+                                    yield inbox.Receive() 
+                        }   
+                        |> Async.Parallel
 
-                        tracer.logVerb "got %d messages" allmsgs.Length
-                        if (isStarted) then
-                            // Make sure SyncDowns are prefered over SyncUp
-                            // And also make sure we do not spam our queue
-                            for msg in
-                                allmsgs |> Set.ofSeq  |> Seq.sort |> Seq.toList |> List.rev do
-                                let work, name =
-                                    match msg with
-                                    | DoSyncUp -> 
-                                        doTask SyncState.SyncUp (fun () -> x.StartSyncUp()), "syncUp"
-                                    | DoSyncDown ->
-                                        doTask SyncState.SyncDown (fun () -> x.StartSyncDown()), "syncDown"
+                    tracer.logVerb "got %d messages" allmsgs.Length
+                    if (isStarted) then
+                        // Make sure SyncDowns are prefered over SyncUp
+                        // And also make sure we do not spam our queue
+                        for msg in
+                            allmsgs |> Set.ofSeq  |> Seq.sort |> Seq.toList |> List.rev do
+                            let work, name =
+                                match msg with
+                                | DoSyncUp -> 
+                                    doTask SyncUp (fun () -> x.StartSyncUp()), "syncUp"
+                                | DoSyncDown ->
+                                    doTask SyncDown (fun () -> x.StartSyncDown()), "syncDown"
 
-                                tracer.logVerb "starting work %s" name
-                                do! work |> AsyncTrace.SetTracer (tracer.childTracer traceSource name)
-                               
-                    with 
-                        | exn -> 
-                            tracer.logErr "Error in Processing: %s" (exn.ToString())
-                            syncError.Trigger exn
+                            tracer.logVerb "starting work %s" name
+                            do! work |> AsyncTrace.SetTracer (tracer.childTracer traceSource name)
+                    else
+                        tracer.logInfo "ignoring %d messages (not started)" allmsgs.Length
                     return! loop (i+1)
                 }
             loop 0 
@@ -130,7 +126,7 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
             |> Event.add 
                 (fun e -> 
                     globalTracer.logCrit "Mailbox crashed: %s" (e.ToString())
-                    syncError.Trigger e)
+                    crash (new  System.Reflection.TargetException("Mailbox crashed" ,e)))
 
     /// The requested Conflictstrategy
     member x.ConflictStrategy = conflictStrategy
@@ -177,9 +173,6 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
             then "..."
             else "").TrimEnd()
         
-    /// Reports an error (this should be protected, but this is not available in F#)
-    member x.ReportError exn = syncError.Trigger exn
-
     /// Does a complete sync to the server (Should fail when there are conflicting changes)
     abstract StartSyncUp : unit -> AsyncTrace<ITracer, unit>
 
@@ -194,17 +187,16 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
     [<CLIEvent>]
     abstract SyncConflict : IEvent<SyncConflict>
 
-    interface IManagedFolder with
-        member x.StartService () = 
-            isStarted <- true
+    interface ISyncFolderFolder with 
+        member x.StartService () = isStarted <- true            
+        member x.StopService () = isStarted <- false
 
-            // Init service with a down and upsync
-            processor.Post(DoSyncDown)
-            processor.Post(DoSyncUp)
-            
-            
-        member x.StopService () = 
-            isStarted <- false
+        member x.RequestSync state =
+            let action =
+                match state with
+                | SyncUp -> DoSyncUp
+                | SyncDown -> DoSyncDown
+            processor.Post(action)
 
         [<CLIEvent>]
         member x.ProgressChanged = x.ProgressChanged
@@ -212,9 +204,6 @@ type RepositoryFolder(folder : ManagedFolderInfo) as x =
         [<CLIEvent>]
         member x.SyncConflict = x.SyncConflict
         
-        [<CLIEvent>]
-        member x.SyncError = syncError.Publish
-
         [<CLIEvent>]
         member x.SyncStateChanged = syncStateChanged.Publish
 

@@ -13,6 +13,15 @@ open System.IO
 /// Module for little helper functions
 [<AutoOpen>]
 module Helpers = 
+    let doPipe f e = 
+        f(e)
+        e
+    let crash e = 
+        let t = new Thread(fun () -> raise e)
+        t.Name <- "CrashThread"
+        t.Start()
+        t.Join()
+
     module Dict = 
         let tryGetValue k (d:System.Collections.Generic.IDictionary<_,_>) =
             match d.TryGetValue(k) with
@@ -117,11 +126,11 @@ module Helpers =
     
     module Map =
         /// Adds the given key if it is not already added
-        let tryAdd key value map = 
+        let tryAdd key (value:Lazy<_>) map = 
             if (map |> Map.containsKey key) then
                 map
             else
-                map |> Map.add key (Lazy.force value)
+                map |> Map.add key (value.Force())
 
     module Event =
         /// Executes f just after adding the event-handler

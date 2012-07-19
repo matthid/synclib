@@ -39,8 +39,8 @@
     <Compile Include="Helpers.fs" />
     <Compile Include="AsyncStreamWriter.fs" />
     <Compile Include="PubsubImplementation.fs" />
-    <Compile Include="ManagedFolder.fs" />
     <Compile Include="ChangeWatcher.fs" />
+    <Compile Include="ManagedFolder.fs" />
     <Compile Include="ToolProcess.fs" />
     <Compile Include="RepositoryFolder.fs" />
     <None Include="Script.fsx" />

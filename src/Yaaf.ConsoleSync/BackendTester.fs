@@ -10,11 +10,12 @@ open Yaaf.SyncLib.Git
 
 // Create a manager for a specific folder
 let addManagerEvents (manager:IManagedFolder) =
+    let folder = manager.Folder
     // Listen to the events
-    manager.ProgressChanged
+    folder.ProgressChanged
         |> Event.add (fun p -> printfn "New Progress %s" (p.ToString()))
 
-    manager.SyncConflict
+    folder.SyncConflict
         |> Event.add 
             (fun conf -> 
                 match conf with
@@ -22,7 +23,9 @@ let addManagerEvents (manager:IManagedFolder) =
                 | SyncConflict.FileLocked(file) -> printfn "A file is locked! %s" file
                 | SyncConflict.Unknown(s) -> printfn "Unknown Conflict: %s" s)
 
-    manager.SyncError
+    folder.SyncStateChanged
+        |> Event.filter (fun t -> match t with SyncState.SyncError(_) -> true | _ -> false)
+        |> Event.map (fun t -> match t with SyncState.SyncError(_, e) -> e | _ -> failwith "invalid event")
         |> Event.add
             (fun error -> 
                 match error with
@@ -34,7 +37,7 @@ let addManagerEvents (manager:IManagedFolder) =
                 | ToolProcessFailed(errorCode, cmd, output, errorOutput) -> printfn "Unknown Tool Error(%s): %d, %s, %s" cmd errorCode output errorOutput
                 | _ -> printfn "Error: %s" (error.ToString()))
 
-    manager.SyncStateChanged
+    folder.SyncStateChanged
         |> Event.add
             (fun changed -> printfn "State changed: %s" (changed.ToString()))
 

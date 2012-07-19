@@ -33,7 +33,7 @@ type SvnBackendManager() =
         if not <| System.IO.Directory.Exists(folder.FullPath) then
             System.IO.Directory.CreateDirectory(folder.FullPath) |> ignore
 
-        new SvnRepositoryFolder({ folder with Additional=newDict }) :> IManagedFolder
+        new SvnRepositoryFolder({ folder with Additional=newDict }) :> ISyncFolderFolder
     
     interface IBackendManager with
         member x.CreateFolderManager(folder) = x.CreateFolderManager(folder)

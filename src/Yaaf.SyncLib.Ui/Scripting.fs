@@ -29,13 +29,77 @@ module Scripting =
 
     let Git = new GitBackendManager() :> IBackendManager
     let Svn = new SvnBackendManager() :> IBackendManager
+        
+    /// given an Data dictionary we will return all available remote data server
+    let extractRemoteConnectionData (dataDict:System.Collections.Generic.IDictionary<string,string>) =
+        seq {
+            match dataDict |> Dict.tryGetValue "PubsubUrl", 
+                  dataDict |> Dict.tryGetValue "PubsubChannel" with
+            | Some (pubsubUri), Some(pubsubChannel) -> 
+                yield Pubsub(new System.Uri(pubsubUri),pubsubChannel)
+            | _ -> ()
+        }
+
     type BackendInfo = ManagedFolderInfo
 
     let HideFsi () = 
         InterOp.HideProcWindow (System.Diagnostics.Process.GetCurrentProcess())
+    let EmptyManager  (backendManager:IBackendManager) (info:ManagedFolderInfo) = 
+        let syncFolder = backendManager.CreateFolderManager info
+        let manager =
+            syncFolder
+                |> Sync.toManaged
+        info, manager
+    let AddLocalWatcher time ignoreFolders (info,folder) = 
+        let localWatcher = 
+            Notify.localWatcher info.FullPath
+            |> Event.filter 
+                (fun (changeType, oldPath, newPath) -> 
+                    not (ignoreFolders
+                        |> Seq.exists
+                            (fun folder ->
+                                let fullPath = Path.Combine(info.FullPath, folder)
+                                oldPath.StartsWith fullPath || newPath.StartsWith fullPath)))
+            // Reduce event
+            |> Event.reduceTime time
+            |> Notify.fromEvent
+        info,
+        folder
+            |> Sync.addLocalNotifier localWatcher
+
+    let AddRemotesFromInfo (info, folder) = 
+        let remoteProvider =
+            info.Additional
+            |> extractRemoteConnectionData 
+            |> doPipe (fun s -> if s |> Seq.length = 0 then scriptTrace.logWarn "No remote data for %s!" info.Name)
+            |> RemoteConnectionManager.calculateMergedEvent
+            |> Notify.fromRemoteEvents (Guid.NewGuid().ToString())
+        info,
+        folder 
+            |> Sync.addRemoteNotifier remoteProvider
+    let AddRemote provider (info, folder) = 
+        info,
+        folder
+            |> Sync.addRemoteNotifier provider
+
+    let AddRemoteFromData data info = 
+        let provider =
+            RemoteConnectionManager.remoteDataToEvent data
+                    |> Notify.fromRemoteEvents (Guid.NewGuid().ToString())    
+        info
+            |> AddRemote provider
 
     let CustomManager (backendManager:IBackendManager) (info:ManagedFolderInfo) = 
-        info, backendManager.CreateFolderManager info
+        let info, manager = EmptyManager backendManager info
+        let ignoreFolders = 
+            match backendManager with
+            | Equals Git -> [".git"]
+            | Equals Svn -> [".svn"]
+            | _ -> []
+            
+        (info, manager )
+            |> AddRemotesFromInfo
+            |> AddLocalWatcher (System.TimeSpan.FromMinutes(1.0)) ignoreFolders
 
     let BackendInfo name folder server additionalInfo = {
         Name = name
@@ -45,11 +109,8 @@ module Scripting =
     }
 
     let Manager backend name folder server = 
-        let info =
-            BackendInfo name folder server Map.empty
-        CustomManager
-            backend
-            info
+        let info = BackendInfo name folder server Map.empty
+        CustomManager backend info
 
     let doOnGdk f = 
         Gtk.Application.Invoke(fun sender args -> f())
@@ -88,10 +149,31 @@ module Scripting =
                 managerItem.Activated
                     |> Event.add (fun args ->
                             System.Diagnostics.Process.Start(info.FullPath) |> ignore)
-                manager.SyncStateChanged
+                manager.Folder.SyncStateChanged
                     |> Event.add (fun state ->
                         doOnGdk (fun _ ->
                             match state with
+                            | SyncState.SyncError(t, error) ->
+                                try
+                                doOnGdk (fun _ ->
+                                    printfn "Trying to display: %A" error
+                                    icon.Stock <- Stock.DialogError
+                                    icon.Blinking <- true
+                                    let md = new MessageDialog (null, DialogFlags.Modal, MessageType.Info, ButtonsType.Ok, false, "{0}", [| ((sprintf "Error: %A" error):>obj) |])
+                                    md.UseMarkup <- false
+                                    md.Run() |> ignore
+                                    let myLog m = 
+                                        printfn "%s" m; scriptTrace.logInfo "%s" m
+                                    md.ButtonPressEvent    
+                                        |> Event.add (fun e -> myLog "pressed")
+                                    md.ButtonReleaseEvent  
+                                        |> Event.add (fun e -> myLog "released")
+                                    
+                                    md.Close
+                                        |> Event.add (fun t -> md.Destroy()))
+                                    // md.Run () |> ignore
+                                    //md.Destroy())
+                                with exn -> scriptTrace.logErr "Error in MessageDialog %O" exn
                             | SyncState.Idle -> 
                                 icon.Blinking <- false
                                 icon.Stock <- Stock.Info
@@ -100,14 +182,14 @@ module Scripting =
                                 icon.Blinking <- false
                                 icon.Stock <- Stock.DialogWarning
                                 image.Stock <- Stock.DialogWarning
-                            | SyncState.SyncDown ->
+                            | SyncState.SyncStart(s) ->
+                                let iconImage =
+                                    match s with
+                                    | SyncUp -> Stock.GoUp
+                                    | SyncDown -> Stock.GoDown
                                 icon.Blinking <- true
-                                icon.Stock <- Stock.GoDown
-                                image.Stock <- Stock.GoDown
-                            | SyncState.SyncUp ->
-                                icon.Blinking <- true
-                                icon.Stock <- Stock.GoUp
-                                image.Stock <- Stock.GoUp
+                                icon.Stock <-iconImage
+                                image.Stock <- iconImage
                             | _ as syncState-> 
                                 scriptTrace.logErr "Unknown syncstate %O" syncState
                                 icon.Stock <- Stock.DialogError
@@ -115,32 +197,9 @@ module Scripting =
                                 icon.Blinking <- true
                             )
                         )
-                manager.SyncError
-                    |> Event.add (fun error ->
-                            
-                            try
-                            doOnGdk (fun _ ->
-                                printfn "Trying to display: %A" error
-                                icon.Stock <- Stock.DialogError
-                                icon.Blinking <- true
-                                let md = new MessageDialog (null, DialogFlags.Modal, MessageType.Info, ButtonsType.Ok, false, "{0}", [| ((sprintf "Error: %A" error):>obj) |])
-                                md.UseMarkup <- false
-                                md.Run() |> ignore
-                                let myLog m = 
-                                    printfn "%s" m; scriptTrace.logInfo "%s" m
-                                md.ButtonPressEvent    
-                                    |> Event.add (fun e -> myLog "pressed")
-                                md.ButtonReleaseEvent  
-                                    |> Event.add (fun e -> myLog "released")
-                                    
-                                md.Close
-                                    |> Event.add (fun t -> md.Destroy()))
-                                // md.Run () |> ignore
-                                //md.Destroy())
-                            with exn -> scriptTrace.logErr "Error in MessageDialog %O" exn
-                                )
             
                 menu.Add(managerItem)
+                manager.Init()
                 manager.StartService()
         
             menu.Add(quitItem)
