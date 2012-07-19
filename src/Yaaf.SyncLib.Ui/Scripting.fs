@@ -66,12 +66,12 @@ module Scripting =
             icon.PopupMenu 
                 |> Event.add (fun args -> 
                         menu.Popup()
-                        //menu.Popup(null, null, new MenuPositionFunc(fun menu x y push_in -> StatusIcon.PositionMenu(menu, ref x, ref y, ref push_in, icon.Handle)), 0u, Global.CurrentEventTime);
                         GtkUtils.bringToForeground()
                     )
 
             quitItem.Activated
                 |> Event.add (fun args -> 
+                        icon.Visible <- false
                         Application.Quit()    
                     )
         
