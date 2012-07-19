@@ -114,7 +114,15 @@ module Helpers =
                 |> Seq.mapi (fun i t -> i < n, t)
                 |> Seq.takeWhile (fun (shouldTake, t) -> shouldTake)
                 |> Seq.map (fun (shouldTake, t) -> t)
-        
+    
+    module Map =
+        /// Adds the given key if it is not already added
+        let tryAdd key value map = 
+            if (map |> Map.containsKey key) then
+                map
+            else
+                map |> Map.add key (Lazy.force value)
+
     module Event =
         /// Executes f just after adding the event-handler
         let guard f (e:IEvent<'Del, 'Args>) = 
@@ -165,22 +173,27 @@ module Helpers =
         if containings |> List.forall (fun contain -> data.Contains(contain)) then
             Some()
         else None
+    
     /// Checks if any containings are substrings of data
     let (|ContainsAny|_|) (containings:string list) (data:string) = 
         if containings |> List.exists (fun contain -> data.Contains(contain)) then
             Some()
         else None
+    
     /// Checks if data startswith start
     let (|StartsWith|_|) (start:string) (data:string) =   
         if (data.StartsWith(start)) then Some(data.Substring(start.Length)) else None
+    
     /// Checks if data endswith endString
     let (|EndsWith|_|) (endString:string) (data:string) =   
         if (data.EndsWith(endString)) then Some(data.Substring(0, data.Length - endString.Length)) else None
+    
     /// Checks if the given items are equal
     let (|Equals|_|) x y = if x = y then Some() else None
 
-    let inline (|EqualsAny|_|) x y =
-        if x |> List.exists (fun item -> item = y) then Some() else None
+    /// Checks if any x equals y
+    let inline (|EqualsAny|_|) xes y =
+        if xes |> List.exists (fun item -> item = y) then Some() else None
 
     /// Checks if the given string is an integer and returns it if so
     let (|Integer|_|) (str: string) =

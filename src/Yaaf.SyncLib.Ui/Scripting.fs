@@ -29,6 +29,7 @@ module Scripting =
 
     let Git = new GitBackendManager() :> IBackendManager
     let Svn = new SvnBackendManager() :> IBackendManager
+    type BackendInfo = ManagedFolderInfo
 
     let HideFsi () = 
         InterOp.HideProcWindow (System.Diagnostics.Process.GetCurrentProcess())
@@ -36,16 +37,20 @@ module Scripting =
     let CustomManager (backendManager:IBackendManager) (info:ManagedFolderInfo) = 
         info, backendManager.CreateFolderManager info
 
-    let BackendInfo name folder server additionalInfo = 
-        new ManagedFolderInfo (
-            name, folder, server, additionalInfo)
+    let BackendInfo name folder server additionalInfo = {
+        Name = name
+        FullPath = folder
+        Remote = server
+        Additional = additionalInfo
+    }
 
     let Manager backend name folder server = 
         let info =
-            BackendInfo name folder server (new System.Collections.Generic.Dictionary<_,_>())
+            BackendInfo name folder server Map.empty
         CustomManager
             backend
             info
+
     let doOnGdk f = 
         Gtk.Application.Invoke(fun sender args -> f())
 

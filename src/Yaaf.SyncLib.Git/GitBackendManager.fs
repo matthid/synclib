@@ -7,6 +7,7 @@ namespace Yaaf.SyncLib.Git
 
 open Yaaf.SyncLib
 open Yaaf.SyncLib.Git
+open Yaaf.SyncLib.Helpers.Map
 
 type GitBackendManager() = 
      
@@ -32,20 +33,19 @@ type GitBackendManager() =
         | Option.Some(foundPath) -> foundPath
         | Option.None -> def)
         
-    let locateGit() = locatePath possibleGitPaths "git"
-    let locateSsh() = locatePath possibleSshPaths "ssh"
-    let checkKey (dict:System.Collections.Generic.IDictionary<_,_>) key f = 
-        if not (dict.ContainsKey(key)) then
-            dict.[key] <- f()
+    let gitPath = lazy locatePath possibleGitPaths "git"
+    let sshPath = lazy locatePath possibleSshPaths "ssh"
 
     member x.CreateFolderManager(folder:ManagedFolderInfo) = 
-        checkKey folder.Additional "gitpath" locateGit
-        checkKey folder.Additional "sshpath" locateSsh
+        let newDict =
+            folder.Additional 
+                |> Map.tryAdd "gitPath" gitPath
+                |> Map.tryAdd "sshpath" sshPath
 
         if not <| System.IO.Directory.Exists(folder.FullPath) then
             System.IO.Directory.CreateDirectory(folder.FullPath) |> ignore
 
-        new GitRepositoryFolder(folder) :> IManagedFolder
+        new GitRepositoryFolder({ folder with Additional = newDict }) :> IManagedFolder
     
     interface IBackendManager with
         member x.CreateFolderManager(folder) = x.CreateFolderManager(folder)

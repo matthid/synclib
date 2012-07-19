@@ -22,9 +22,18 @@ let myManagers = [
                 "GitReproName" 
                 "C:\\users\\me\\documents\\mygitrepro" 
                 "git@mygitserver2:repro.git"
-                (dict [("PubsubUrl",     "tcp://notifications.sparkleshare.org:80");
-                       ("PubsubChannel", "akhgfjkasbhdfasdf" )]))
+                (Map.ofList [("PubsubUrl",     "tcp://notifications.sparkleshare.org:80");
+                             ("PubsubChannel", "akhgfjkasbhdfasdf" )]))
                 
+        CustomManager 
+            Git 
+            {
+                Name = "GitReproName" 
+                FullPath = "C:\\users\\me\\documents\\mygitrepro" 
+                Remote = "git@mygitserver2:repro.git"
+                Additional = Map.ofList [("PubsubUrl",     "tcp://notifications.sparkleshare.org:80");
+                                         ("PubsubChannel", "akhgfjkasbhdfasdf" )]
+            }
 
         // Add a git repository note the "GitRepro/Test" is the name and no folder
         Manager Git "GitRepro/Test" "C:\\users\\me\\documents\\mygitrepro" "git@mygitserver:repro.git"

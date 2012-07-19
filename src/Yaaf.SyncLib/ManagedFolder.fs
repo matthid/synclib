@@ -7,17 +7,17 @@ namespace Yaaf.SyncLib
 open System.Threading.Tasks
 
 /// A simple info object to contain all the settings for a specific backend. Extensible over the IDictionary
-type ManagedFolderInfo(name:string, path:string, remote:string, dict:System.Collections.Generic.IDictionary<string,string>) = 
-    let dictCopy = new System.Collections.Generic.Dictionary<_,_>(dict) :> System.Collections.Generic.IDictionary<_,_>
+type ManagedFolderInfo = {
     /// The name or key shown in the gui for the folder, has to be unique (possibly used by the backend)
-    member x.Name = name
+    Name : string
     /// The full path of the folder (used by the backend)
-    member x.FullPath = path 
+    FullPath : string
     /// The remote string for the folder (used by the backend)
-    member x.Remote = remote
+    Remote : string
     /// Additional settings to be extensible (other backends could have other configurations requirements)
     /// The following are supported natively: "PubsubUrl" "PubsubChannel"
-    member x.Additional = dictCopy
+    Additional : Map<string,string>
+}  
 
 /// The Type of Conflict that occured while syncing
 type SyncConflict = 

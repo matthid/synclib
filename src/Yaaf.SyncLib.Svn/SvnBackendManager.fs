@@ -23,18 +23,17 @@ type SvnBackendManager() =
         | Option.Some(foundPath) -> foundPath
         | Option.None -> def)
         
-    let locateSvn() = locatePath possibleSvnPaths "svn"
-    let checkKey (dict:System.Collections.Generic.IDictionary<_,_>) key f = 
-        if not (dict.ContainsKey(key)) then
-            dict.[key] <- f()
+    let svnPath = lazy locatePath possibleSvnPaths "svn"
 
     member x.CreateFolderManager(folder:ManagedFolderInfo) = 
-        checkKey folder.Additional "svnpath" locateSvn
+        let newDict = 
+            folder.Additional
+                |> Map.tryAdd "svnpath" svnPath
 
         if not <| System.IO.Directory.Exists(folder.FullPath) then
             System.IO.Directory.CreateDirectory(folder.FullPath) |> ignore
 
-        new SvnRepositoryFolder(folder) :> IManagedFolder
+        new SvnRepositoryFolder({ folder with Additional=newDict }) :> IManagedFolder
     
     interface IBackendManager with
         member x.CreateFolderManager(folder) = x.CreateFolderManager(folder)
