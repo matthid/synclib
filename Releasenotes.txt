@@ -1,0 +1,8 @@
+
+
+
+
+2012-07-20: Release notes started with
+* Git,Svn support
+* Git submodule support
+* Simple UI with basic functionality (starting/stopping sync, syncnow)

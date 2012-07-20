@@ -62,6 +62,9 @@
     <None Include="..\..\Usage.md">
       <Link>Usage.md</Link>
     </None>
+    <Content Include="..\..\Releasenotes.txt">
+      <Link>Releasenotes.txt</Link>
+    </Content>
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FSharp.PowerPack">

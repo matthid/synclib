@@ -79,11 +79,13 @@ export FSI="mono `pwd`/lib/FSharp-4.0/fsi.exe"
 
 ## Contributing
 
-### There are 2 ways to contribute to the project.
+### There are 3 ways to contribute to the project.
 
 - If you plan to send multiple patches in the future the best would be to sign a Contributor-Agreement (https://github.com/matthid/synclib/blob/master/ContributorAgreement.md) and send a scanned copy to matthi.d@googlemail.com.
 
 - If you only want to send a single patch (or very few in general) you can state in the comment note and the pull request, that you share your changes under the MIT-License. For example: "This contribution is Licensed unter the http://www.opensource.org/licenses/mit-license.html"
+
+- Report an issue https://github.com/matthid/synclib/issues. See "Report a Bug"
 
 ### Why so "complicated"?
 
@@ -100,6 +102,20 @@ I really think free software licenses are the way to go. But the GPL is very res
   * "Except as set out above, you keep all right, title, and interest in your contribution."
 
 - If you feal like you can't contribute because of this, please send me a mail or open a issue.
+
+### Report a Bug
+
+If the Bug is an application crash do the following:
+- move the contents of the "logs" folder, do not remove/move the logs folder itself.
+- start the application and produce the bug.
+- attach the contents of the logs folder to your issue request.
+
+If you can't reproduce the bug attach the moved contents.
+If it is not a bug you do not have to attach any logs of course. This is true for feature requests, api change requests...
+
+Sometimes even with logs the bug can't be figured out easily. In this case I will request a minidump from you.
+
+TODO: Show how to create a minidump...
 
 ## Licensing
 
