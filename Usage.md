@@ -215,9 +215,43 @@ let myManagers = [
 	]		
 ```
 
-## Customize Icon
+## Customize Tray Menu
 
-TODO: add content.
+With
+```fsharp
+// Starting Tray Icon
+RunGui myManagers
+```
+you can get a very basic tray icon. 
+If you look into the "RunGui" you can see how easy it is to configure your menu.
+```fsharp
+InitGtkGui()
+    |> AddManagerIcons managers
+    |> AddSuspendManagerIcon managers
+    |> AddTriggerSyncButton managers
+    |> AddQuitIcon
+    |> StartGtk
+                
+for info, manager in managers do manager.StopService()
+```
+In this code you can disable or enable specific features/menuitems or reorder them.
+
+```fsharp
+InitGtkGui()
+    |> AddTriggerSyncButton managers
+    |> AddManagerIcons managers
+    //|> AddSuspendManagerIcon managers
+    |> AddQuitIcon
+    |> StartGtk
+                
+for info, manager in managers do manager.StopService()
+```
+In this example we have reordered the items and disabled the suspend button.
+Actually you can add your own Menuitems, 
+but to give them some functionality you should be able to write simple F# code.
+
+NOTE: It is possible to develop your own notification-provider, synchronisation-implementation or menuitems and then just use them in RunApplication.fsx.
+You won't even realise a difference.
 
 ## Localize!
 

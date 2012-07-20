@@ -41,7 +41,7 @@ module Scripting =
         }
 
     type BackendInfo = ManagedFolderInfo
-
+    type ManagerInfo = ManagedFolderInfo * IManagedFolder
     let HideFsi () = 
         InterOp.HideProcWindow (System.Diagnostics.Process.GetCurrentProcess())
     let EmptyManager  (backendManager:IBackendManager) (info:ManagedFolderInfo) = 
@@ -49,7 +49,7 @@ module Scripting =
         let manager =
             syncFolder
                 |> Sync.toManaged
-        info, manager
+        (info, manager):ManagerInfo
     let AddLocalWatcher time ignoreFolders (info,folder) = 
         let localWatcher = 
             Notify.localWatcher info.FullPath
@@ -63,9 +63,8 @@ module Scripting =
             // Reduce event
             |> Event.reduceTime time
             |> Notify.fromEvent
-        info,
-        folder
-            |> Sync.addLocalNotifier localWatcher
+        (info, folder
+               |> Sync.addLocalNotifier localWatcher):ManagerInfo
 
     let AddRemotesFromInfo (info, folder) = 
         let remoteProvider =
@@ -74,13 +73,11 @@ module Scripting =
             |> doPipe (fun s -> if s |> Seq.length = 0 then scriptTrace.logWarn "No remote data for %s!" info.Name)
             |> RemoteConnectionManager.calculateMergedEvent
             |> Notify.fromRemoteEvents (Guid.NewGuid().ToString())
-        info,
-        folder 
-            |> Sync.addRemoteNotifier remoteProvider
+        (info, folder 
+               |> Sync.addRemoteNotifier remoteProvider):ManagerInfo
     let AddRemote provider (info, folder) = 
-        info,
-        folder
-            |> Sync.addRemoteNotifier provider
+        (info, folder
+               |> Sync.addRemoteNotifier provider):ManagerInfo
 
     let AddRemoteFromData data info = 
         let provider =
@@ -97,9 +94,9 @@ module Scripting =
             | Equals Svn -> [".svn"]
             | _ -> []
             
-        (info, manager )
+        ((info, manager )
             |> AddRemotesFromInfo
-            |> AddLocalWatcher (System.TimeSpan.FromMinutes(1.0)) ignoreFolders
+            |> AddLocalWatcher (System.TimeSpan.FromMinutes(1.0)) ignoreFolders):ManagerInfo
 
     let BackendInfo name folder server additionalInfo = {
         Name = name
@@ -114,98 +111,157 @@ module Scripting =
 
     let doOnGdk f = 
         Gtk.Application.Invoke(fun sender args -> f())
+    type GtkIconInfo = Gtk.StatusIcon * Gtk.Menu
 
-    let RunGui (managers:(ManagedFolderInfo * IManagedFolder) list)  =
-        try
-            scriptTrace.logVerb "Starting UI"
-            Gtk.Application.Init ();
-            catalogInit "Yaaf.SyncLib.Ui" "./lang"
-            let icon = StatusIcon.NewFromStock(Stock.Info)
-            icon.Tooltip <- CString "Update Notification Icon"
-            //icon.set_FromFile(
-
-            let menu = new Menu() 
-            let quitItem = new ImageMenuItem(CString "Quit")
-
-            quitItem.Image <- new Image(Stock.Quit, IconSize.Menu)
-        
-            icon.PopupMenu 
-                |> Event.add (fun args -> 
-                        menu.Popup()
-                        GtkUtils.bringToForeground()
-                    )
-
-            quitItem.Activated
-                |> Event.add (fun args -> 
-                        icon.Visible <- false
-                        Application.Quit()    
-                    )
-        
-            for info, manager in managers do
-            
-                let managerItem = new ImageMenuItem(CString info.Name)
-                let image = new Image(Stock.Directory, IconSize.Menu)
-                managerItem.Image <- image
-                managerItem.Activated
-                    |> Event.add (fun args ->
-                            System.Diagnostics.Process.Start(info.FullPath) |> ignore)
-                manager.Folder.SyncStateChanged
-                    |> Event.add (fun state ->
+    /// Adds an icon for each given manager
+    let AddManagerIcons (managers:ManagerInfo list)  (gtkInfo:GtkIconInfo) = 
+        let icon, menu = gtkInfo
+        for info, manager in managers do
+            let managerItem = new ImageMenuItem(CString info.Name)
+            let image = new Image(Stock.Directory, IconSize.Menu)
+            managerItem.Image <- image
+            managerItem.Activated
+                |> Event.add (fun args ->
+                        System.Diagnostics.Process.Start(info.FullPath) |> ignore)
+            manager.Folder.Error
+                |> Event.add 
+                    (fun (error, state) ->
+                        try
                         doOnGdk (fun _ ->
-                            match state with
-                            | SyncState.SyncError(t, error) ->
-                                try
-                                doOnGdk (fun _ ->
-                                    printfn "Trying to display: %A" error
-                                    icon.Stock <- Stock.DialogError
-                                    icon.Blinking <- true
-                                    let md = new MessageDialog (null, DialogFlags.Modal, MessageType.Info, ButtonsType.Ok, false, "{0}", [| ((sprintf "Error: %A" error):>obj) |])
-                                    md.UseMarkup <- false
-                                    md.Run() |> ignore
-                                    let myLog m = 
-                                        printfn "%s" m; scriptTrace.logInfo "%s" m
-                                    md.ButtonPressEvent    
-                                        |> Event.add (fun e -> myLog "pressed")
-                                    md.ButtonReleaseEvent  
-                                        |> Event.add (fun e -> myLog "released")
+                            printfn "Trying to display: %A" error
+                            icon.Stock <- Stock.DialogError
+                            icon.Blinking <- true
+                            let md = new MessageDialog (null, DialogFlags.Modal, MessageType.Info, ButtonsType.Ok, false, "{0}", [| ((sprintf "Error: %A" error):>obj) |])
+                            md.UseMarkup <- false
+                            md.Run() |> ignore
+                            let myLog m = 
+                                printfn "%s" m; scriptTrace.logInfo "%s" m
+                            md.ButtonPressEvent    
+                                |> Event.add (fun e -> myLog "pressed")
+                            md.ButtonReleaseEvent  
+                                |> Event.add (fun e -> myLog "released")
                                     
-                                    md.Close
-                                        |> Event.add (fun t -> md.Destroy()))
-                                    // md.Run () |> ignore
-                                    //md.Destroy())
-                                with exn -> scriptTrace.logErr "Error in MessageDialog %O" exn
-                            | SyncState.Idle -> 
-                                icon.Blinking <- false
-                                icon.Stock <- Stock.Info
-                                image.Stock <- Stock.Directory
-                            | SyncState.Offline ->
-                                icon.Blinking <- false
-                                icon.Stock <- Stock.DialogWarning
-                                image.Stock <- Stock.DialogWarning
-                            | SyncState.SyncStart(s) ->
-                                let iconImage =
-                                    match s with
-                                    | SyncUp -> Stock.GoUp
-                                    | SyncDown -> Stock.GoDown
-                                icon.Blinking <- true
-                                icon.Stock <-iconImage
-                                image.Stock <- iconImage
-                            | _ as syncState-> 
-                                scriptTrace.logErr "Unknown syncstate %O" syncState
-                                icon.Stock <- Stock.DialogError
-                                image.Stock <- Stock.DialogError
-                                icon.Blinking <- true
-                            )
+                            md.Close
+                                |> Event.add (fun t -> md.Destroy()))
+                            // md.Run () |> ignore
+                            //md.Destroy())
+                        with exn -> scriptTrace.logErr "Error in MessageDialog %O" exn)
+            manager.Folder.SyncStateChanged
+                |> Event.add (fun state ->
+                    doOnGdk (fun _ ->
+                        match state with
+                        | SyncState.SyncError(t, error) ->
+                            ()
+                        | SyncState.Idle -> 
+                            icon.Blinking <- false
+                            icon.Stock <- Stock.Info
+                            image.Stock <- Stock.Directory
+                        | SyncState.Offline ->
+                            icon.Blinking <- false
+                            icon.Stock <- Stock.DialogWarning
+                            image.Stock <- Stock.DialogWarning
+                        | SyncState.SyncStart(s) ->
+                            let iconImage =
+                                match s with
+                                | SyncUp -> Stock.GoUp
+                                | SyncDown -> Stock.GoDown
+                            icon.Blinking <- true
+                            icon.Stock <-iconImage
+                            image.Stock <- iconImage
+                        | _ as syncState-> 
+                            scriptTrace.logErr "Unknown syncstate %O" syncState
+                            icon.Stock <- Stock.DialogError
+                            image.Stock <- Stock.DialogError
+                            icon.Blinking <- true
                         )
+                    )
             
-                menu.Add(managerItem)
-                manager.Init()
-                manager.StartService()
-        
-            menu.Add(quitItem)
-            menu.ShowAll() 
-            Application.Run()
+            menu.Add(managerItem)
+            manager.Init()
+            manager.StartService()
+        gtkInfo
 
+    /// Inits an empty tray icon
+    let InitGtkGui () = 
+        scriptTrace.logVerb "Starting UI"
+        Gtk.Application.Init ();
+        catalogInit "Yaaf.SyncLib.Ui" "./lang"
+        let icon = StatusIcon.NewFromStock(Stock.Info)
+        icon.Tooltip <- CString "Update Notification Icon"
+
+        let menu = new Menu() 
+        icon.PopupMenu 
+            |> Event.add (fun args -> 
+                    menu.Popup()
+                    GtkUtils.bringToForeground()
+                )
+        (icon, menu):GtkIconInfo
+
+    /// Adds a simple custom menuentry
+    let AddSimpleIcon name stock f (gtkInfo:GtkIconInfo) = 
+        let icon, menu = gtkInfo
+        let item = new ImageMenuItem(CString name)
+
+        item.Image <- new Image((stock:string), IconSize.Menu)
+        
+        item.Activated
+            |> Event.add (fun args -> 
+                    f item |> ignore
+                )
+          
+        menu.Add(item)  
+        gtkInfo
+
+    /// Adds a quit icon to the menu
+    let AddQuitIcon (gtkInfo:GtkIconInfo) = 
+        gtkInfo
+            |> AddSimpleIcon "Quit" Stock.Quit
+                (fun item ->                    
+                    (fst gtkInfo).Visible <- false
+                    Application.Quit())
+
+    /// Adds a simple suspend button
+    let AddSuspendManagerIcon (managers:ManagerInfo list) (gtkInfo:GtkIconInfo) =
+        let isSuspend = ref false
+        gtkInfo
+            |> AddSimpleIcon "Suspend" Stock.MediaStop
+                (fun item ->  
+                    let newStock =
+                        if !isSuspend then
+                            for info, manager in managers do manager.StartService()
+                            Stock.MediaStop
+                        else    
+                            for info, manager in managers do manager.StopService()
+                            Stock.MediaPlay
+                    item.Image <- new Image(newStock, IconSize.Menu)
+                    isSuspend := not !isSuspend     
+                    )
+    let AddTriggerSyncButton  (managers:ManagerInfo list) (gtkInfo:GtkIconInfo) =
+        let isSuspend = ref false
+        gtkInfo
+            |> AddSimpleIcon "SyncNow" Stock.Refresh
+                (fun item ->  
+                    for info, manager in managers do 
+                        manager.Folder.RequestSync(SyncDown)
+                        manager.Folder.RequestSync(SyncUp)
+                    )
+    ///Shows the given icon
+    let StartGtk (gtkInfo:GtkIconInfo) = 
+        let icon, menu = gtkInfo
+        
+        menu.ShowAll() 
+        Application.Run()
+
+    /// Creates a simple menu and shows it
+    let RunGui (managers:ManagerInfo list)  =
+        try
+            InitGtkGui()
+                |> AddManagerIcons managers
+                |> AddSuspendManagerIcon managers
+                |> AddTriggerSyncButton managers
+                |> AddQuitIcon
+                |> StartGtk
+                
             for info, manager in managers do manager.StopService()
         with exn -> scriptTrace.logCrit "Error in RunGui %O" exn
 

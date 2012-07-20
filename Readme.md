@@ -1,5 +1,6 @@
 # Yaaf.SyncLib 
 
+
 SyncLib makes folder syncronisation easy with any piece of technology you like (git, svn, and possibly more).
 This is an easy syncronisation library you can use in your code to syncronize some folders.
 This library is written entirelyin F# (FSharp) but can be used in any .NET/Mono Language like 
@@ -8,8 +9,14 @@ C# (CSharp), F# (FSharp), VB.NET, C++/CLI, Windows Powershell (Could be quite us
 This Project contains a console application AND a simple gtk# UI you can change as you like.
 The gtk# application will be configured/scripted with the RunApplication.fsx file.
 
-If you want something more sophisticated but easier to configure check out http://sparkleshare.org/.
+If you want to just use the Gui read: https://github.com/matthid/synclib/blob/master/Usage.md
 
+If you want something more like dropbox (easy install & usage) check out http://sparkleshare.org/. 
+SyncLib requires more attention/time in the installing phase. 
+But after you configured everything it should run _exactly_ as you want it to run.
+If you have any problems open an issue.
+
+SyncLib is still in an early development stage.
 
 ## Dependencies
 

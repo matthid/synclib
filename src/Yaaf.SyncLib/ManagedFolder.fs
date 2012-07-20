@@ -61,6 +61,7 @@ type ISyncFolderFolder =
     
     /// Starts the attached provider services
     abstract member StartService : unit -> unit
+
     /// Stops the attached provider services
     abstract member StopService : unit -> unit    
 
@@ -75,7 +76,16 @@ type ISyncFolderFolder =
     /// Indicates a progress - change in the sync process
     [<CLIEvent>]
     abstract member ProgressChanged : IEvent<double>
-    
+
+[<AutoOpen>]
+module SyncFolderExtensions = 
+    type ISyncFolderFolder with
+        member x.Error = 
+            x.SyncStateChanged
+            |> Event.filter (fun t -> match t with SyncState.SyncError(_) -> true | _ -> false)
+            |> Event.map (fun t -> match t with SyncState.SyncError(state, e) -> state, e | _ -> failwith "invalid event")
+        
+
 /// A simple type to create the Mangers (this can be dynamically loaded in the future for example)
 type IBackendManager = 
     /// Inits a FolderSync instance for the given folder

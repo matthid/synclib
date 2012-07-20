@@ -23,11 +23,9 @@ let addManagerEvents (manager:IManagedFolder) =
                 | SyncConflict.FileLocked(file) -> printfn "A file is locked! %s" file
                 | SyncConflict.Unknown(s) -> printfn "Unknown Conflict: %s" s)
 
-    folder.SyncStateChanged
-        |> Event.filter (fun t -> match t with SyncState.SyncError(_) -> true | _ -> false)
-        |> Event.map (fun t -> match t with SyncState.SyncError(_, e) -> e | _ -> failwith "invalid event")
+    folder.Error
         |> Event.add
-            (fun error -> 
+            (fun (state, error) -> 
                 match error with
                 | SshAuthException(message) ->
                     printfn "%s" message
