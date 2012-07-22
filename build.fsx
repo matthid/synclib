@@ -4,7 +4,7 @@
 // ----------------------------------------------------------------------------
 
 // BUILD SCRIPT FOR SYNC-LIB
-#I @"lib\FAKE"
+#I @"lib/FAKE"
 #r "FakeLib.dll"
 
 open Fake
@@ -20,6 +20,7 @@ let buildVersion = "1.0.0.0"
 
 TraceEnvironmentVariables()  
   
+<<<<<<< HEAD
 let buildDir =      "build" @@ "bin"              @@ ""
 let buildLibDir =   "build" @@ "bin" @@ "lib"     @@ ""
 let buildLegalDir = "build" @@ "bin" @@ "legal"   @@ ""
@@ -34,12 +35,29 @@ let deployZip =     deployDir @@ sprintf "%s-%s.zip" projectName buildVersion
 
 // tools
 let templatesSrcDir = "lib" @@ "Docu" @@ "templates" @@ ""
+=======
+let buildDir =      "build" @@ "bin"
+let buildLibDir =   "build" @@ "bin" @@ "lib"
+let buildLegalDir = "build" @@ "bin" @@ "legal"
+let testDir =       "build" @@ "test"
+let metricsDir =    "build" @@ "BuildMetrics"
+let deployDir =     "build" @@ "Publish" 
+let docsDir =       "build" @@ "docs"      
+let nugetDir =      "build" @@ "nuget"      
+let reportDir =     "build" @@ "report" 
+let packagesDir =   "packages"
+let deployZip =     deployDir @@ sprintf "%s-%s.zip" projectName buildVersion
+
+// tools
+let templatesSrcDir = "lib" @@ "Docu" @@ "templates"
+>>>>>>> FAKE build
 let MSpecVersion = GetPackageVersion packagesDir "Machine.Specifications"
 let mspecTool = (sprintf "%sMachine.Specifications.%s" packagesDir MSpecVersion) @@ "tools" @@ "mspec-clr4.exe"
 
 // files
-let testReferences = !! ("src" @@ "Yaaf.SyncLibTest**.*sproj")
-let appReferences  = !! ("src" @@ "Yaaf.SyncLib**.*sproj" )
+
+let testReferences = !! ("src" @@ "Yaaf.SyncLibTest**/*.*sproj")
+let appReferences  = !! ("src" @@ "Yaaf.SyncLib**/*.*sproj" )
 
 // Targets
 Target "Clean" (fun _ ->
@@ -127,7 +145,7 @@ Target "CopyLicense" (fun _ ->
 )
 
 Target "BuildZip" (fun _ ->     
-    !+ (buildDir @@ "**.*") 
+    !+ (buildDir @@ "**/*.*") 
     -- "*.zip" 
     -- "**/*.pdb"
       |> Scan
@@ -149,13 +167,13 @@ Target "Test" (fun _ ->
 )
 
 Target "ZipDocumentation" (fun _ ->    
-    !! (docsDir + @"\**\*.*")  
+    !! (docsDir + @"/**/*.*")  
       |> Zip docsDir (deployDir @@ sprintf "Documentation-%s.zip" buildVersion)
 )
 
 Target "CreateNuGet" (fun _ -> 
-    let nugetDocsDir = nugetDir @@ "docs/"
-    let nugetToolsDir = nugetDir @@ "tools/"
+    let nugetDocsDir = nugetDir @@ "docs"
+    let nugetToolsDir = nugetDir @@ "tools"
 
     XCopy docsDir nugetDocsDir
     XCopy buildDir nugetToolsDir
