@@ -1,6 +1,7 @@
 
 
-
+2012-07-22: FAKE build
+* Support for building with FAKE
 
 2012-07-20: Release notes started with
 * Git,Svn support

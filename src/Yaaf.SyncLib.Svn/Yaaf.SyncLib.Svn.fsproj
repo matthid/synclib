@@ -43,6 +43,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
     <Compile Include="SvnProcess.fs" />
     <Compile Include="SvnRepositoryFolder.fs" />
     <Compile Include="SvnBackendManager.fs" />

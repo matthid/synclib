@@ -1,4 +1,4 @@
-module Yaaf.SyncLib.AssemblyInfo
+module Yaaf.SyncLib.Svn.AssemblyInfo
 #nowarn "49" // uppercase argument names
 #nowarn "67" // this type test or downcast will always hold
 #nowarn "66" // tis upast is unnecessary - the types are identical
@@ -16,11 +16,11 @@ exception ReturnNoneException183c26a427ae489c8fd92ec21a0c9a59
 
 [<assembly: CLSCompliant (false)>]
 
-[<assembly: Guid ("9D7AA0CB-0512-4F2A-BC5C-A3513763385B")>]
+[<assembly: Guid ("982D6E42-9FB5-4CC3-83E9-ACCD4A1C8342")>]
 
-[<assembly: AssemblyTitle ("SyncLib - F# Sync Library")>]
+[<assembly: AssemblyTitle ("SyncLib.Svn - F# Svn Bindings for SyncLib")>]
 
-[<assembly: AssemblyProduct ("SyncLib - F# Sync Library")>]
+[<assembly: AssemblyProduct ("SyncLib.Svn - F# Svn Bindings for SyncLib")>]
 
 [<assembly: AssemblyVersion ("1.0.0.0")>]
 

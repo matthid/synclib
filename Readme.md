@@ -27,7 +27,8 @@ SyncLib is still in an early development stage.
   * http://www.microsoft.com/de-de/download/details.aspx?id=17718 .NET 4
 - https://github.com/fsharp/powerpack which includes an AsyncStreamReader
 - http://nuget.codeplex.com/ not currently used but will be most likly in the future (because of FAKE)
-
+- http://git-scm.com/ Git if you use it
+- http://subversion.apache.org/ Svn if you use it
 
 ## Using
 
