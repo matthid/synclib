@@ -35,7 +35,6 @@
   <Import Project="$(MSBuildExtensionsPath32)\FSharp\1.0\Microsoft.FSharp.Targets" Condition=" ('$(OS)' == 'Windows_NT' AND !Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')) " />
   <Import Project="$(MSBuildExtensionsPath32)\..\Microsoft F#\v4.0\Microsoft.FSharp.Targets" Condition=" ('$(OS)' == 'Windows_NT' AND  Exists('$(MSBuildBinPath)\Microsoft.Build.Tasks.v4.0.dll')) " />
   <Import Project="$(MSBuildExtensionsPath32)\..\4.0\Microsoft.FSharp.targets" Condition=" ('$(OS)' != 'Windows_NT') " />
-  
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Helpers.fs" />
@@ -70,8 +69,7 @@
   </ItemGroup>
   <ItemGroup>
     <Reference Include="FSharp.PowerPack">
-      <HintPath>C:\Program Files (x86)\FSharpPowerPack-2.0.0.0\bin\FSharp.PowerPack.dll</HintPath>
-      <Private>True</Private>
+      <HintPath>..\..\lib\Powerpack\FSharp.PowerPack.dll</HintPath>
     </Reference>
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core" />
