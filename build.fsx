@@ -41,6 +41,7 @@ let mspecTool = (sprintf "%sMachine.Specifications.%s" packagesDir MSpecVersion)
 
 let testReferences = !! ("src" @@ "Yaaf.SyncLibTest**/*.*sproj")
 let appReferences  = !! ("src" @@ "Yaaf.SyncLib**/*.*sproj" )
+let isUnix = System.Environment.OSVersion.Platform = System.PlatformID.Unix
 
 // Targets
 Target "Clean" (fun _ ->
@@ -87,8 +88,8 @@ Target "SetAssemblyInfo" (fun _ ->
 
 Target "BuildApp" (fun _ ->                     
     MSBuildRelease buildLibDir "Build" appReferences
-        |> Log "AppBuild-Output: "
-    
+        |> Log "AppBuild-Output: "    
+
     (!! (@"lib" @@ "FSharp" @@ "**"))
        |> CopyTo buildDir      
 
@@ -100,9 +101,10 @@ Target "BuildApp" (fun _ ->
 )
 
 Target "GenerateDocumentation" (fun _ ->
-    !! (buildDir + "Yaaf.SyncLib*.dll")
-    |> Docu (fun p ->
-        {p with
+    if not isUnix then
+      !! (buildDir + "Yaaf.SyncLib*.dll")
+      |> Docu (fun p ->
+          {p with
             ToolPath = "lib" @@ "Docu" @@ "docu.exe"
             TemplatesPath = templatesSrcDir
             OutputPath = docsDir })
@@ -120,7 +122,7 @@ Target "CopyLicense" (fun _ ->
      "Releasenotes.txt"]
        |> CopyTo buildDir
     System.IO.Directory.CreateDirectory(buildLegalDir) |> ignore
-    [@"lib" @@ "FSharp" @@ "FSharp.LICENSE.txt"
+    [@"lib" @@ "FSharp-4.0" @@ "FSharp.LICENSE.txt"
      @"lib" @@ "Powerpack" @@ "FSharp.PowerPack.LICENSE.txt"
      @"lib" @@ "Yaaf.AsyncTrace" @@ "Yaaf.AsyncTrace.License.md"
      ]
