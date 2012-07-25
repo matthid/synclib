@@ -20,22 +20,6 @@ let buildVersion = "1.0.0.0"
 
 TraceEnvironmentVariables()  
   
-<<<<<<< HEAD
-let buildDir =      "build" @@ "bin"              @@ ""
-let buildLibDir =   "build" @@ "bin" @@ "lib"     @@ ""
-let buildLegalDir = "build" @@ "bin" @@ "legal"   @@ ""
-let testDir =       "build" @@ "test"             @@ ""
-let metricsDir =    "build" @@ "BuildMetrics"     @@ ""
-let deployDir =     "build" @@ "Publish"          @@ ""
-let docsDir =       "build" @@ "docs"             @@ ""
-let nugetDir =      "build" @@ "nuget"            @@ ""
-let reportDir =     "build" @@ "report"           @@ ""   
-let packagesDir =   "packages"                    @@ ""
-let deployZip =     deployDir @@ sprintf "%s-%s.zip" projectName buildVersion
-
-// tools
-let templatesSrcDir = "lib" @@ "Docu" @@ "templates" @@ ""
-=======
 let buildDir =      "build" @@ "bin"
 let buildLibDir =   "build" @@ "bin" @@ "lib"
 let buildLegalDir = "build" @@ "bin" @@ "legal"
@@ -50,7 +34,6 @@ let deployZip =     deployDir @@ sprintf "%s-%s.zip" projectName buildVersion
 
 // tools
 let templatesSrcDir = "lib" @@ "Docu" @@ "templates"
->>>>>>> FAKE build
 let MSpecVersion = GetPackageVersion packagesDir "Machine.Specifications"
 let mspecTool = (sprintf "%sMachine.Specifications.%s" packagesDir MSpecVersion) @@ "tools" @@ "mspec-clr4.exe"
 
