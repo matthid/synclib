@@ -90,6 +90,16 @@ Target "BuildApp" (fun _ ->
     MSBuildRelease buildLibDir "Build" appReferences
         |> Log "AppBuild-Output: "    
 
+    // TODO: Check why xbuild fails with this
+    if isUnix then
+        !! ("src" @@ "Yaaf.SyncLib*/obj/Release/**.dll")
+            |> CopyTo buildLibDir
+        !! ("src" @@ "Yaaf.SyncLib*/obj/Release/**.mdb")
+            |> CopyTo buildLibDir
+        !! ("src" @@ "Yaaf.SyncLib*/bin/Release/**.XML")
+            |> CopyTo buildLibDir
+
+
     (!! (@"lib" @@ "FSharp" @@ "**"))
        |> CopyTo buildDir      
 
