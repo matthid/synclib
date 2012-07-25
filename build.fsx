@@ -92,20 +92,22 @@ Target "BuildApp" (fun _ ->
 
     // TODO: Check why xbuild fails with this
     if isUnix then
+        ensureDirectory buildLibDir
         !! ("src" @@ "Yaaf.SyncLib*/obj/Release/**.dll")
             |> CopyTo buildLibDir
         !! ("src" @@ "Yaaf.SyncLib*/obj/Release/**.mdb")
             |> CopyTo buildLibDir
         !! ("src" @@ "Yaaf.SyncLib*/bin/Release/**.XML")
             |> CopyTo buildLibDir
+        !! ("lib" @@ "PowerPack" @@ "*.dll")
+            |> CopyTo buildLibDir
+        !! ("lib" @@ "Yaaf.AsyncTrace" @@ "*.dll")
+            |> CopyTo buildLibDir
 
-
-    (!! (@"lib" @@ "FSharp" @@ "**"))
-       |> CopyTo buildDir      
-
-    [@"src" @@ "Yaaf.SyncLib.Ui" @@ "StartUi.cmd"
-     @"src" @@ "Yaaf.SyncLib.Ui" @@ "fsi.exe.config"
-     @"src" @@ "Yaaf.SyncLib.Ui" @@ "RunApplication.fsx"
+    ["src" @@ "Yaaf.SyncLib.Ui" @@ "StartUi.cmd"
+     "src" @@ "Yaaf.SyncLib.Ui" @@ "StartUi.sh"
+     "src" @@ "Yaaf.SyncLib.Ui" @@ "fsi.exe.config"
+     "src" @@ "Yaaf.SyncLib.Ui" @@ "RunApplication.fsx"
      ]
        |> CopyTo buildDir
 )
@@ -132,7 +134,7 @@ Target "CopyLicense" (fun _ ->
      "Releasenotes.txt"]
        |> CopyTo buildDir
     System.IO.Directory.CreateDirectory(buildLegalDir) |> ignore
-    [@"lib" @@ "FSharp-4.0" @@ "FSharp.LICENSE.txt"
+    [@"lib" @@ "FSharp" @@ "FSharp.LICENSE.txt"
      @"lib" @@ "Powerpack" @@ "FSharp.PowerPack.LICENSE.txt"
      @"lib" @@ "Yaaf.AsyncTrace" @@ "Yaaf.AsyncTrace.License.md"
      ]
