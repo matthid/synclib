@@ -1,9 +1,14 @@
 
 
+2012-07-26: Release FAKE build
++ Finished FAKE (building on Linux/Windows)
+* Fixed a bug on linux systems
+* Fixed a parsing bug in submodule-status
+
 2012-07-22: FAKE build
-* Support for building with FAKE
++ Initial Support for building with FAKE
 
 2012-07-20: Release notes started with
-* Git,Svn support
-* Git submodule support
-* Simple UI with basic functionality (starting/stopping sync, syncnow)
++ Git,Svn support
++ Git submodule support
++ Simple UI with basic functionality (starting/stopping sync, syncnow)
