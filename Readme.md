@@ -22,13 +22,25 @@ SyncLib is still in an early development stage.
 
 - https://github.com/forki/FAKE (binaries included, but not jet properly used)
 - https://github.com/fsharp/fsharp FSharp libraries required to use SyncLib and fsc required to build the Project
+  * On windows install: http://www.microsoft.com/de-de/download/details.aspx?id=13450
+  * Linux binaries are included if you don't want to build yourself (lib/FSharp in source or FSharp in the binaries)
+    The easiest way to install F# is to copy the contents of the lib/FSharp folder to /usr.
+    (NOTE: if you do not simply copy the F# files make sure to edit the .targets files to make it build)
 - CLI Runtime (one of those)
-  * https://github.com/mono/mono Mono > 2.10.8 
+  * https://github.com/mono/mono, http://www.go-mono.com/mono-downloads/download.html Mono >= 2.10.8 
+	Your mono should be installed or build in "/usr" prefix (ie: /usr/lib/mono)
   * http://www.microsoft.com/de-de/download/details.aspx?id=17718 .NET 4
-- https://github.com/fsharp/powerpack which includes an AsyncStreamReader
-- http://nuget.codeplex.com/ not currently used but will be most likly in the future (because of FAKE)
-- http://git-scm.com/ Git if you use it
+- https://github.com/fsharp/powerpack which includes an AsyncStreamReader (included)
+- http://nuget.codeplex.com/ not currently used but will be most likely in the future (because of FAKE)
+- http://git-scm.com/ Git if you use it 
+  * on windows install a recent msysgit version in C:\Program Files (x86)\Git (you are able to configure this path if you wish)
+  * on linux make sure the git executable is in PATH (default if installed)
 - http://subversion.apache.org/ Svn if you use it
+  * on windows install tortoisesvn in C:\Program Files\TortoiseSVN\bin (you can configure this and most likely use any other svn.exe)
+  * on linux make sure svn is in PATH (default if installed)
+  
+  For both installs make sure you use an english executable, any other language is not supported and can't be parsed.
+  You can use a localized svn executable for yourself but synclib requires an english one.
 
 ## Using
 
@@ -58,10 +70,17 @@ In the future you will not have to depend on Yaaf.SyncLib.Git and Yaaf.SyncLib.S
 
 ## Building
 
-This Section will be expended in the future.
-
 ### Windows
-Make sure to install all requirements (for example F# runtime)
+Make sure to install all requirements (for example F# runtime).
+
+Do something like this:
+http://erictummers.wordpress.com/2012/01/25/target-mono-from-visual-studio/
+The changes I did:
+
+- C:\Program Files (x86)\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.0\Profile\Mono_2.10 instead of C:\Program Files\Reference Assemblies\Microsoft\Framework\.NETFramework\v4.0\Profile\Mono.
+- HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework\v4.0.30319\SKUs\.NETFramework,Version=v4.0,Profile=Mono_2.10 instead of HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\.NETFramework\v4.0.30319\SKUs\.NETFramework,Version=v4.0,Profile=Mono
+(because I use multiple profiles)
+
 
 run the "build.cmd"
 
@@ -70,10 +89,7 @@ fire up Visual Studio and build the Projekt
 
 ### Linux
 
-Make sure to install all requirements (install mono and F#).
-Your mono should be installed in /usr prefix (ie: /usr/lib/mono)
-The easiest way to install F# is to copy the contents of the lib/FSharp folder to /usr.
-(NOTE: if you do not simply copy the F# files make sure to edit the .targets files to make it build)
+Make sure to install all requirements (install mono and F# see dependencies).
 
 Building
 ```bash

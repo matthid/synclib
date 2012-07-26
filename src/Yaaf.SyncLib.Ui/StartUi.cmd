@@ -1,2 +1,2 @@
 @echo off
-Fsi.exe --exec --nologo RunApplication.fsx
+fsi.exe --exec --nologo RunApplication.fsx

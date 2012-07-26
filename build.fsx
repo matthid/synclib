@@ -23,6 +23,7 @@ TraceEnvironmentVariables()
 let buildDir =      "build" @@ "bin"
 let buildLibDir =   "build" @@ "bin" @@ "lib"
 let buildLegalDir = "build" @@ "bin" @@ "legal"
+let buildFSharpDir = "build" @@ "bin" @@ "FSharp"
 let testDir =       "build" @@ "test"
 let metricsDir =    "build" @@ "BuildMetrics"
 let deployDir =     "build" @@ "Publish" 
@@ -89,6 +90,19 @@ Target "SetAssemblyInfo" (fun _ ->
 Target "BuildApp" (fun _ ->                     
     MSBuildRelease buildLibDir "Build" appReferences
         |> Log "AppBuild-Output: "    
+    // Copy fsi files (to enable logging)
+    let fsiFiles = ["fsi.exe"; "FSharp.Compiler.Interactive.Settings.dll"]
+    let prePath = 
+        if isUnix then
+            "/usr/lib/mono/4.0"
+        else 
+            ProgramFilesX86 @@ @"Microsoft F#\v4.0"
+    fsiFiles 
+        |> Seq.map ((@@) prePath)
+        |> CopyTo buildDir
+
+    // To ensure that logfiles are created
+    ensureDirectory (buildDir @@ "logs")
 
     // TODO: Check why xbuild fails with this
     if isUnix then
@@ -104,6 +118,12 @@ Target "BuildApp" (fun _ ->
         !! ("lib" @@ "Yaaf.AsyncTrace" @@ "*.dll")
             |> CopyTo buildLibDir
 
+    // Copy the FSharp folder (for easy linux install)
+    ensureDirectory buildFSharpDir
+    !! ("lib" @@ "FSharp")
+        |> CopyTo buildFSharpDir
+
+    // Copy configuration files
     ["src" @@ "Yaaf.SyncLib.Ui" @@ "StartUi.cmd"
      "src" @@ "Yaaf.SyncLib.Ui" @@ "StartUi.sh"
      "src" @@ "Yaaf.SyncLib.Ui" @@ "fsi.exe.config"

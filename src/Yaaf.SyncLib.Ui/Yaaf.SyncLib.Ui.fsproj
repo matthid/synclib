@@ -74,15 +74,9 @@
     <Compile Include="PosixHelper.fs" />
     <Compile Include="GtkNotification.fs" />
     <Compile Include="Scripting.fs" />
-    <None Include="RunApplication.fsx">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="StartUi.cmd">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="fsi.exe.config">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
+    <None Include="RunApplication.fsx" />
+    <None Include="StartUi.cmd" />
+    <None Include="fsi.exe.config" />
     <None Include="StartUi.sh" />
   </ItemGroup>
   <ItemGroup>
