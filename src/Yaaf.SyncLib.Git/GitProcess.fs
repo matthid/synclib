@@ -174,7 +174,7 @@ type GitRemoteInfo = {
         Name : string;
         Url : string;
         Type : GitRemoteType; }
-        
+
 module HandleGitData = 
     /// Resolves an ansi string given by git and outputs the utf8 string
     let resolveSpecialChars (s:string) = 
@@ -246,12 +246,24 @@ module HandleGitData =
         }
     let parseSubmoduleStatusLine (l:string) = 
         let splits = l.Substring(1).Split([|' '|])
+        if (splits.Length < 2) then failwith "invalid submodule status line"
+        let last = splits.[splits.Length - 1]
+        // BUG: not 100% but pretty close
+        // The path could be something line "test/blub (branch)" this would be 
+        // recognised as "test/blub" with branch "branch"
+        // On windows we could check if there is a "/" in the last string,
+        // On linux not even this would work.
+        let containsBranch = splits.Length > 2 && last.StartsWith("(") && last.EndsWith(")")
         {
             Status = convertSubmoduleStatus l.[0]
             Sha1 = splits.[0]
-            Branch = splits.[splits.Length - 1]
-            Path = System.String.Join(" ", splits |> Seq.skip 1 |> Seq.take (splits.Length - 2))
+            Branch = 
+                if containsBranch then
+                    splits.[splits.Length - 1]
+                else ""
+            Path = System.String.Join(" ", splits |> Seq.skip 1 |> Seq.take (splits.Length - (if containsBranch then 2 else 1)))
         }
+
 
 
 /// Permission of the given file was denied (can be "unknown filename") 
