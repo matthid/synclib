@@ -103,20 +103,24 @@ type ToolProcess(processFile:string, workingDir:string, arguments:string) =
                         (!outputBuilder).AppendLine(data.Data) |> ignore)
             let commandLine = 
                 sprintf "%s> \"%s\" %s" workingDir processFile arguments
-            t.logInfo "Starting Process: %s" commandLine
-            if not <| toolProcess.Start() then
-                failwith "could not start process"
 
-            toolProcess.BeginErrorReadLine()
-            toolProcess.BeginOutputReadLine()
+            let isStarted = ref false
+            let start() =
+                if not <| !isStarted then
+                    toolProcess.EnableRaisingEvents <- true
+                    t.logInfo "Starting Process: %s" commandLine
+                    if not <| toolProcess.Start() then
+                        failwith "could not start process"
+
+                    toolProcess.BeginErrorReadLine()
+                    toolProcess.BeginOutputReadLine()
+                    isStarted := true
             
             t.logVerb "Waiting for the process exit event"
             // Wait for the process to finish
             let! exitEvent = 
                 toolProcess.Exited 
-                    |> Event.guard 
-                        (fun () ->
-                            toolProcess.EnableRaisingEvents <- true)
+                    |> Event.guard start
                     |> Async.AwaitEvent
                     |> AsyncTrace.FromAsync
             t.logVerb "Waiting for the process to exit (buffers)"
