@@ -31,7 +31,6 @@ let docsDir =       "build" @@ "docs"
 let nugetDir =      "build" @@ "nuget"      
 let reportDir =     "build" @@ "report" 
 let packagesDir =   "packages"
-let deployZip =     deployDir @@ sprintf "%s-%s.zip" projectName buildVersion
 
 // tools
 let templatesSrcDir = "lib" @@ "Docu" @@ "templates"
@@ -43,6 +42,8 @@ let mspecTool = (sprintf "%sMachine.Specifications.%s" packagesDir MSpecVersion)
 let testReferences = !! ("src" @@ "Yaaf.SyncLibTest**/*.*sproj")
 let appReferences  = !! ("src" @@ "Yaaf.SyncLib**/*.*sproj" )
 let isUnix = System.Environment.OSVersion.Platform = System.PlatformID.Unix
+
+let deployZip =     deployDir @@ sprintf "%s-%s%s.zip" projectName (if isUnix then "Linux-" else "") buildVersion
 
 // Targets
 Target "Clean" (fun _ ->
@@ -118,10 +119,10 @@ Target "BuildApp" (fun _ ->
         !! ("lib" @@ "Yaaf.AsyncTrace" @@ "*.dll")
             |> CopyTo buildLibDir
 
-    // Copy the FSharp folder (for easy linux install)
-    ensureDirectory buildFSharpDir
+        // Copy the FSharp folder (for easy linux install)
+        ensureDirectory buildFSharpDir
     
-    CopyRecursive ("lib" @@ "FSharp") buildFSharpDir true |> ignore
+        CopyRecursive ("lib" @@ "FSharp") buildFSharpDir true |> ignore
 
     // Copy configuration files
     ["src" @@ "Yaaf.SyncLib.Ui" @@ "StartUi.cmd"
