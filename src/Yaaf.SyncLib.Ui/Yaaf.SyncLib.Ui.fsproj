@@ -78,6 +78,7 @@
     <None Include="StartUi.cmd" />
     <None Include="fsi.exe.config" />
     <None Include="StartUi.sh" />
+    <None Include="MonoHelper.fsx" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Yaaf.SyncLib.Git\Yaaf.SyncLib.Git.fsproj">
