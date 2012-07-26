@@ -120,8 +120,8 @@ Target "BuildApp" (fun _ ->
 
     // Copy the FSharp folder (for easy linux install)
     ensureDirectory buildFSharpDir
-    !! ("lib" @@ "FSharp")
-        |> CopyTo buildFSharpDir
+    
+    CopyRecursive ("lib" @@ "FSharp") buildFSharpDir true |> ignore
 
     // Copy configuration files
     ["src" @@ "Yaaf.SyncLib.Ui" @@ "StartUi.cmd"
