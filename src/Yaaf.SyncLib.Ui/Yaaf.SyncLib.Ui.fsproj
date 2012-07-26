@@ -83,6 +83,7 @@
     <None Include="fsi.exe.config">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Include="StartUi.sh" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\Yaaf.SyncLib.Git\Yaaf.SyncLib.Git.fsproj">

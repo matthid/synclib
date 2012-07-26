@@ -23,7 +23,7 @@ The first lines are really only there to load the required dependencies and make
 
 ```fsharp
 #I @"lib"
-#I @"bin\Debug\lib"
+#I @"bin\Debug\lib" // You can remove this line if you want to prevent startup warnings
 #r "Yaaf.SyncLib.dll"
 #r "Yaaf.SyncLib.Ui.dll"
 open Yaaf.SyncLib
@@ -90,20 +90,21 @@ you can run "your" program.
 If you did build your Executables yourself:
 Enter the folder src\Yaaf.SyncLib.Ui\bin\Debug and run StartUi.cmd from there.
 
-If you downloaded the binaries (not available quite jet):
+If you downloaded the binaries:
 run "StartUi.cmd" 
 
 #### Linux/possibly Mac
 
 On Linux/Mac you must have a Mono > 2.10.8 installed and in your PATH.
+Also make sure you have installed F# (read Readme)
 
 If you did build your Executables yourself:
 ```bash
-cd build/bin
-mono fsi.exe --exec --nologo RunApplication.fsx
+cd build/bin 
+./StartUi.sh
 ```
 
-If you downloaded the binaries (not available quite jet):
+If you downloaded the binaries:
 ```bash
 ./StartUi.sh
 ```

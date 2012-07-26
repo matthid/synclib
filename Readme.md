@@ -36,7 +36,7 @@ You can either use the Library or the UI
 
 ### UI
 
-First build (see below) or download (not available quite jet) the binaries then read
+First build (see below) or download the binaries then read
 https://github.com/matthid/synclib/blob/master/Usage.md
 
 ### Library
@@ -61,22 +61,30 @@ In the future you will not have to depend on Yaaf.SyncLib.Git and Yaaf.SyncLib.S
 This Section will be expended in the future.
 
 ### Windows
+Make sure to install all requirements (for example F# runtime)
 
-For now: fire up Visual Studio and build the Projekt (Windows Only)
+run the "build.cmd"
 
-I'm working on a FAKE build script (https://github.com/forki/FAKE).
-I'd like to have a FAKE build script which will work on linux and windows. 
-So if somebody has some insight on this just go ahaid and send a patch.
+OR: 
+fire up Visual Studio and build the Projekt
 
 ### Linux
+
+Make sure to install all requirements (install mono and F#).
+Your mono should be installed in /usr prefix (ie: /usr/lib/mono)
+The easiest way to install F# is to copy the contents of the lib/FSharp folder to /usr.
+(NOTE: if you do not simply copy the F# files make sure to edit the .targets files to make it build)
+
 Building
 ```bash
 git clone git://github.com/matthid/synclib.git
 cd synclib
-export FSC="mono `pwd`/lib/FSharp-4.0/fsc.exe"
-export FSI="mono `pwd`/lib/FSharp-4.0/fsi.exe"
+// Note this may not work on your distro, so replace it with the right commands
+cp -R lib/FSharp/* /usr/
+
 ./build_mono.sh
 ```
+Note: there is no "docu.exe" support on mono, so you will get no documentation.
 
 ## Contributing
 
@@ -125,3 +133,6 @@ https://github.com/matthid/synclib/blob/master/License.txt is a GPL License in v
 
 If you require another licensing please write to matthi.d@googlemail.com. (I will always consider helping open source projects).
 Also remember: If you massively contribute to the project I have the option to give you any license you may require.
+
+You can find Licenses of the programs this project depends on in either the "lib/$Project" folder or if you use the binaries 
+in the "legal" folder.
