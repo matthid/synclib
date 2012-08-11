@@ -1,4 +1,6 @@
 
+1.0.1
+* Fixed a bug in the error notification code (for example "no username/email set")
 
 2012-07-26: Release FAKE build
 + Finished FAKE (building on Linux/Windows)

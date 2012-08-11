@@ -125,10 +125,10 @@ module Scripting =
                         System.Diagnostics.Process.Start(info.FullPath) |> ignore)
             manager.Folder.Error
                 |> Event.add 
-                    (fun (error, state) ->
+                    (fun (state, error) ->
                         try
                         doOnGdk (fun _ ->
-                            printfn "Trying to display: %A" error
+                            printfn "Trying to display: %O" error
                             icon.Stock <- Stock.DialogError
                             icon.Blinking <- true
                             let md = new MessageDialog (null, DialogFlags.Modal, MessageType.Info, ButtonsType.Ok, false, "{0}", [| ((sprintf "Error: %A" error):>obj) |])
