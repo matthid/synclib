@@ -22,9 +22,9 @@ exception ReturnNoneException183c26a427ae489c8fd92ec21a0c9a59
 
 [<assembly: AssemblyProduct ("SyncLib.Git - F# Git Bindings for SyncLib")>]
 
-[<assembly: AssemblyVersion ("1.0.1.0")>]
+[<assembly: AssemblyVersion ("1.0.2.0")>]
 
-[<assembly: AssemblyFileVersion ("1.0.1.0")>]
+[<assembly: AssemblyFileVersion ("1.0.2.0")>]
 
 [<assembly: AssemblyDelaySign (false)>]
 

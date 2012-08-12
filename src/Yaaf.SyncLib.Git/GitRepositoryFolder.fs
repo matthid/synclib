@@ -303,6 +303,7 @@ type GitRepositoryFolder(folder:ManagedFolderInfo) as x =
                 |> Seq.map (fun s -> s.Path)
                 |> Seq.toList
         if not modulesToInit.IsEmpty then
+            do! GitProcess.submodule (SubmoduleType.Init(modulesToInit)) |> run
             do! GitProcess.submodule (SubmoduleType.Update(modulesToInit)) |> run
     }
 

@@ -1,4 +1,7 @@
 
+1.0.2
+* Fixed a bug in submodule code
+
 1.0.1
 * Fixed a bug in the error notification code (for example "no username/email set")
 

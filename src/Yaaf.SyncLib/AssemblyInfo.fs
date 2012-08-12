@@ -22,9 +22,9 @@ exception ReturnNoneException183c26a427ae489c8fd92ec21a0c9a59
 
 [<assembly: AssemblyProduct ("SyncLib - F# Sync Library")>]
 
-[<assembly: AssemblyVersion ("1.0.1.0")>]
+[<assembly: AssemblyVersion ("1.0.2.0")>]
 
-[<assembly: AssemblyFileVersion ("1.0.1.0")>]
+[<assembly: AssemblyFileVersion ("1.0.2.0")>]
 
 [<assembly: AssemblyDelaySign (false)>]
 

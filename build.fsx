@@ -16,7 +16,7 @@ let projectDescription = "SyncLib - is a syncronisation library for .NET."
 let authors = ["Matthias Dittrich"]
 let mail = "bsod@live.de"
 let homepage = "https://github.com/matthid"
-let buildVersion = "1.0.1.0"
+let buildVersion = "1.0.2.0"
 
 TraceEnvironmentVariables()  
   
